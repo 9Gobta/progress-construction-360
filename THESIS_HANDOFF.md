@@ -25,6 +25,29 @@ If the teammate finds a code problem, record it in
 `docs/thesis/open-questions.md` or send it to the owner. Do not silently repair
 the application from the thesis branch.
 
+## Owner: publish the repository for the first time
+
+The local baseline and the three branches already exist. On GitHub, create a
+new **Private** repository named `progress-construction-360`. Do not initialize
+it with a README, `.gitignore`, or license because those files already exist
+locally.
+
+Then open PowerShell in this repository and replace `<YOUR-GITHUB>` below:
+
+```powershell
+git remote add origin https://github.com/<YOUR-GITHUB>/progress-construction-360.git
+git push -u origin main
+git push -u origin web-development
+git push -u origin thesis-writing
+```
+
+In GitHub, open **Settings → Collaborators → Add people**, invite the teammate,
+and ask them to accept the invitation. Keep the repository Private because the
+project contains implementation and internal research material.
+
+Do not upload the ignored database, videos, advisor audio, `.env`, backups, or
+runtime folders separately to the repository.
+
 ## First-time setup on the teammate's computer
 
 1. Install Git and the Codex desktop app.
@@ -69,6 +92,18 @@ git push
 The owner reviews the change on GitHub, then merges it into `main`. The owner
 can bring the latest approved thesis material into the development branch with
 `git merge main` after committing their own work.
+
+The owner continues product work with:
+
+```powershell
+git switch web-development
+git pull --ff-only origin web-development
+# ask Codex to make and verify one scoped product change
+git push
+```
+
+Neither person should work directly on `main`. Use GitHub pull requests to merge
+`web-development` or `thesis-writing` into `main`, so changes are reviewable.
 
 ## Rules for evidence
 
