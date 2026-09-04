@@ -1,0 +1,208 @@
+{
+  "manifest_version": 1,
+  "generated_at_utc": "2026-08-21T09:18:18.133405+00:00",
+  "data_root": "Data",
+  "source_policy": "read_only",
+  "ffprobe_available": true,
+  "summary": {
+    "file_count": 15,
+    "total_size_bytes": 6938130514,
+    "by_kind": {
+      "bim": 1,
+      "drawing_or_document": 5,
+      "schedule": 3,
+      "video": 6
+    }
+  },
+  "files": [
+    {
+      "relative_path": "681223/VID_20251223_171559_00_022.mp4",
+      "capture_date_hint": "681223",
+      "extension": ".mp4",
+      "kind": "video",
+      "size_bytes": 1494165790,
+      "modified_at_utc": "2026-08-03T12:04:22.226148+00:00",
+      "sha256": "446833c6a485e00dc4b507c9c944103d7a5c01022c5aeba4e1b70d8061fc2f61",
+      "video": {
+        "probe_status": "ok",
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration_seconds": 91.124,
+        "codec": "h264",
+        "width": 7680,
+        "height": 3840,
+        "frame_rate": "30000/1001"
+      }
+    },
+    {
+      "relative_path": "681225/VID_20251225_170525_00_013.mp4",
+      "capture_date_hint": "681225",
+      "extension": ".mp4",
+      "kind": "video",
+      "size_bytes": 150414359,
+      "modified_at_utc": "2026-08-03T12:06:59.980895+00:00",
+      "sha256": "5559c653c20cd3f72ecb63ba647cb328fb990c8befcc8cb428669d661b281c9a",
+      "video": {
+        "probe_status": "ok",
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration_seconds": 8.709,
+        "codec": "h264",
+        "width": 7680,
+        "height": 3840,
+        "frame_rate": "30000/1001"
+      }
+    },
+    {
+      "relative_path": "681226/VID_20251226_170644_00_014(1).mp4",
+      "capture_date_hint": "681226",
+      "extension": ".mp4",
+      "kind": "video",
+      "size_bytes": 1562455857,
+      "modified_at_utc": "2026-08-03T12:46:58.855860+00:00",
+      "sha256": "1d9ee11caea01bdec36fdac70c186a141e13e6308e5fbc19860ab5e45319afab",
+      "video": {
+        "probe_status": "ok",
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration_seconds": 93.26,
+        "codec": "h264",
+        "width": 7680,
+        "height": 3840,
+        "frame_rate": "30000/1001"
+      }
+    },
+    {
+      "relative_path": "681228/VID_20251228_171043_00_013.mp4",
+      "capture_date_hint": "681228",
+      "extension": ".mp4",
+      "kind": "video",
+      "size_bytes": 1332447133,
+      "modified_at_utc": "2026-08-05T03:08:53.070812+00:00",
+      "sha256": "52f4dc2ffb5206948d9066542135841d8562b97aa75ac93a842e17ec355974db",
+      "video": {
+        "probe_status": "ok",
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration_seconds": 81.481,
+        "codec": "h264",
+        "width": 7680,
+        "height": 3840,
+        "frame_rate": "30000/1001"
+      }
+    },
+    {
+      "relative_path": "690212/Camera01/LRV_20260212_171839_01_007.lrv",
+      "capture_date_hint": "690212",
+      "extension": ".lrv",
+      "kind": "video",
+      "size_bytes": 144101704,
+      "modified_at_utc": "2026-02-12T10:20:43.010000+00:00",
+      "sha256": "ae712b1dc6a180159510b653a325d3eec6002921fdc8b8bb6dc4cc6347fc8b5e",
+      "video": {
+        "probe_status": "ok",
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration_seconds": 123.042,
+        "codec": "h264",
+        "width": 1664,
+        "height": 832,
+        "frame_rate": "24/1"
+      }
+    },
+    {
+      "relative_path": "690212/Camera01/VID_20260212_171839_00_007.insv",
+      "capture_date_hint": "690212",
+      "extension": ".insv",
+      "kind": "video",
+      "size_bytes": 1935855951,
+      "modified_at_utc": "2026-02-12T10:20:43.010000+00:00",
+      "sha256": "5be492043e30a09a8c1d106e6efe12f80bfb7754e41435e0efe029e364682a10",
+      "video": {
+        "probe_status": "ok",
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration_seconds": 123.083,
+        "codec": "hevc",
+        "width": 3840,
+        "height": 3840,
+        "frame_rate": "24/1"
+      }
+    },
+    {
+      "relative_path": "A-สถาปัตย์ 19668.pdf",
+      "capture_date_hint": null,
+      "extension": ".pdf",
+      "kind": "drawing_or_document",
+      "size_bytes": 4498751,
+      "modified_at_utc": "2025-08-11T07:48:34.409652+00:00",
+      "sha256": "0b78759fe2943e0f3a89661a24a63ffa40326c8842670db4e4c7a6122a1bb0c7"
+    },
+    {
+      "relative_path": "A-สุขาภิบาล 19668.pdf",
+      "capture_date_hint": null,
+      "extension": ".pdf",
+      "kind": "drawing_or_document",
+      "size_bytes": 7142517,
+      "modified_at_utc": "2025-08-11T07:48:43.252231+00:00",
+      "sha256": "5269d8650ad9a5fc904ae1a04b822b49eb88266cc9dcc581510f2e0f227379f2"
+    },
+    {
+      "relative_path": "A-โครงสร้าง 11668.pdf",
+      "capture_date_hint": null,
+      "extension": ".pdf",
+      "kind": "drawing_or_document",
+      "size_bytes": 3120579,
+      "modified_at_utc": "2025-08-11T07:48:17.083287+00:00",
+      "sha256": "d15ba37b87c15eee6bfff71c21f199d826a96dc9af1db6c2cec6883a74b12739"
+    },
+    {
+      "relative_path": "A-ไฟฟ้า 11668.pdf",
+      "capture_date_hint": null,
+      "extension": ".pdf",
+      "kind": "drawing_or_document",
+      "size_bytes": 7832904,
+      "modified_at_utc": "2025-08-11T07:48:33.561051+00:00",
+      "sha256": "7ec1d7cc9fa43d4dbea107da4cb0930369b1d0f2c6ab2367303b325afcd6a90b"
+    },
+    {
+      "relative_path": "RR.rvt",
+      "capture_date_hint": null,
+      "extension": ".rvt",
+      "kind": "bim",
+      "size_bytes": 294371328,
+      "modified_at_utc": "2026-08-14T03:24:14.852542+00:00",
+      "sha256": "fd3f8739d05e98231cbf37d8d5786c7caf2cc84621479c809029f7cd42b78617"
+    },
+    {
+      "relative_path": "งานคานชั้น 1.xlsx",
+      "capture_date_hint": null,
+      "extension": ".xlsx",
+      "kind": "schedule",
+      "size_bytes": 10076,
+      "modified_at_utc": "2026-08-21T08:03:25.491240+00:00",
+      "sha256": "4aed7f55beaa3cc28252544bf8bf4404e7ada5924663585d141e651ab632ac3c"
+    },
+    {
+      "relative_path": "ชั้น1.mpp",
+      "capture_date_hint": null,
+      "extension": ".mpp",
+      "kind": "schedule",
+      "size_bytes": 571904,
+      "modified_at_utc": "2026-08-07T13:35:04.788000+00:00",
+      "sha256": "af4a0f72bf8b971b2ce2d870003d548866d3153839e54c6f87cf7be18e546cfe"
+    },
+    {
+      "relative_path": "สัญญาจ้างผู้รับเหมา-CP3.pdf",
+      "capture_date_hint": null,
+      "extension": ".pdf",
+      "kind": "drawing_or_document",
+      "size_bytes": 197533,
+      "modified_at_utc": "2026-07-10T04:22:27.782785+00:00",
+      "sha256": "51f3e229f0677be91688c83ccf7f877048d4274e9d1e3e12fcfe5b4316de8354"
+    },
+    {
+      "relative_path": "แผนงานProject-อาคาร-คสล.4ชั้น.mpp",
+      "capture_date_hint": null,
+      "extension": ".mpp",
+      "kind": "schedule",
+      "size_bytes": 944128,
+      "modified_at_utc": "2026-08-21T06:58:26.174424+00:00",
+      "sha256": "ae78121887edee505db7784a06254d26ab7f689a62bd99f9fa8f3b1481223672"
+    }
+  ]
+}

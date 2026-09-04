@@ -1,0 +1,7 @@
+(setvar "FILEDIA" 0)
+(setvar "CMDDIA" 0)
+_.DXFOUT
+"D:/cad_temp_progress_construction/structure.dxf"
+16
+_.QUIT
+_Y

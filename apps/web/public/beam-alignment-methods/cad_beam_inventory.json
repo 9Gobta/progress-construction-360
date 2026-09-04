@@ -1,0 +1,5074 @@
+{
+  "source": "outputs\\cad_beam_alignment\\structure.dxf",
+  "floors": {
+    "1": {
+      "count": 54,
+      "labeled": 50,
+      "accepted": 50,
+      "total_length_m": 162.825,
+      "beams": [
+        {
+          "id": "CAD-L1-001",
+          "beam_type": "B4",
+          "cad_start": [
+            1035.94979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1035.94979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.1998,
+            0.602338
+          ],
+          "plan_end": [
+            0.1998,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "903F+903E"
+        },
+        {
+          "id": "CAD-L1-002",
+          "beam_type": "B3",
+          "cad_start": [
+            1035.94979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1035.94979,
+            -1478.20068
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.1998,
+            0.407364
+          ],
+          "length_m": 1.9,
+          "confidence": 0.98,
+          "source_handles": "903D+903C"
+        },
+        {
+          "id": "CAD-L1-003",
+          "beam_type": "CB4",
+          "cad_start": [
+            1035.94982,
+            -1485.87568
+          ],
+          "cad_end": [
+            1035.94982,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.1998,
+            0.665368
+          ],
+          "plan_end": [
+            0.1998,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.98,
+          "source_handles": "9041+9040"
+        },
+        {
+          "id": "CAD-L1-004",
+          "beam_type": "B2",
+          "cad_start": [
+            1038.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1038.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.253524,
+            0.662007
+          ],
+          "plan_end": [
+            0.253524,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "90A1+90A2"
+        },
+        {
+          "id": "CAD-L1-005",
+          "beam_type": "B3",
+          "cad_start": [
+            1039.69979,
+            -1478.20068
+          ],
+          "cad_end": [
+            1039.69979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.289341,
+            0.407364
+          ],
+          "plan_end": [
+            0.289341,
+            0.272899
+          ],
+          "length_m": 4,
+          "confidence": 0.98,
+          "source_handles": "9043+9042"
+        },
+        {
+          "id": "CAD-L1-006",
+          "beam_type": "CB6",
+          "cad_start": [
+            1039.72479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1039.72479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.289938,
+            0.662007
+          ],
+          "plan_end": [
+            0.289938,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "904A+9049"
+        },
+        {
+          "id": "CAD-L1-007",
+          "beam_type": "B6",
+          "cad_start": [
+            1039.72479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1039.72479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.289938,
+            0.602338
+          ],
+          "plan_end": [
+            0.289938,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "9047+9046"
+        },
+        {
+          "id": "CAD-L1-008",
+          "beam_type": "B3",
+          "cad_start": [
+            1039.72479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1039.72479,
+            -1478.20068
+          ],
+          "plan_start": [
+            0.289938,
+            0.471235
+          ],
+          "plan_end": [
+            0.289938,
+            0.407364
+          ],
+          "length_m": 1.9,
+          "confidence": 0.98,
+          "source_handles": "9045+9044"
+        },
+        {
+          "id": "CAD-L1-009",
+          "beam_type": "B2",
+          "cad_start": [
+            1041.2498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1041.2498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.326352,
+            0.662007
+          ],
+          "plan_end": [
+            0.326352,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "90A3+90A4"
+        },
+        {
+          "id": "CAD-L1-010",
+          "beam_type": "CB6",
+          "cad_start": [
+            1043.47479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1043.47479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.379479,
+            0.662007
+          ],
+          "plan_end": [
+            0.379479,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "9054+9053"
+        },
+        {
+          "id": "CAD-L1-011",
+          "beam_type": "B6",
+          "cad_start": [
+            1043.47479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1043.47479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.379479,
+            0.602338
+          ],
+          "plan_end": [
+            0.379479,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "9051+9050"
+        },
+        {
+          "id": "CAD-L1-012",
+          "beam_type": "B3",
+          "cad_start": [
+            1043.47479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1043.47479,
+            -1478.20068
+          ],
+          "plan_start": [
+            0.379479,
+            0.471235
+          ],
+          "plan_end": [
+            0.379479,
+            0.407364
+          ],
+          "length_m": 1.9,
+          "confidence": 0.98,
+          "source_handles": "904F+904E"
+        },
+        {
+          "id": "CAD-L1-013",
+          "beam_type": "B3",
+          "cad_start": [
+            1043.49979,
+            -1478.20068
+          ],
+          "cad_end": [
+            1043.49979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.380076,
+            0.407364
+          ],
+          "plan_end": [
+            0.380076,
+            0.272899
+          ],
+          "length_m": 4,
+          "confidence": 0.98,
+          "source_handles": "904D+904B+904C"
+        },
+        {
+          "id": "CAD-L1-014",
+          "beam_type": "B2",
+          "cad_start": [
+            1045.69978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1045.69978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.432607,
+            0.662007
+          ],
+          "plan_end": [
+            0.432607,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "90A5+90A6"
+        },
+        {
+          "id": "CAD-L1-015",
+          "beam_type": "CB6",
+          "cad_start": [
+            1047.22479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1047.22479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.46902,
+            0.662007
+          ],
+          "plan_end": [
+            0.46902,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "9056+9057"
+        },
+        {
+          "id": "CAD-L1-016",
+          "beam_type": "B6",
+          "cad_start": [
+            1047.22479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1047.22479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.46902,
+            0.602338
+          ],
+          "plan_end": [
+            0.46902,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "9058+9059"
+        },
+        {
+          "id": "CAD-L1-017",
+          "beam_type": "B3",
+          "cad_start": [
+            1047.22479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1047.22479,
+            -1478.20068
+          ],
+          "plan_start": [
+            0.46902,
+            0.471235
+          ],
+          "plan_end": [
+            0.46902,
+            0.407364
+          ],
+          "length_m": 1.9,
+          "confidence": 0.98,
+          "source_handles": "905A+905B"
+        },
+        {
+          "id": "CAD-L1-018",
+          "beam_type": "B4",
+          "cad_start": [
+            1047.22479,
+            -1478.20068
+          ],
+          "cad_end": [
+            1047.22479,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.46902,
+            0.407364
+          ],
+          "plan_end": [
+            0.46902,
+            0.272899
+          ],
+          "length_m": 4,
+          "confidence": 0.98,
+          "source_handles": "905D+905C+9060+905F+905E"
+        },
+        {
+          "id": "CAD-L1-019",
+          "beam_type": "B1",
+          "cad_start": [
+            1047.7239,
+            -1475.10068
+          ],
+          "cad_end": [
+            1047.7239,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.480938,
+            0.303154
+          ],
+          "plan_end": [
+            0.480938,
+            0.272899
+          ],
+          "length_m": 0.9,
+          "confidence": 1,
+          "source_handles": "REVIEWED_YELLOW"
+        },
+        {
+          "id": "CAD-L1-064",
+          "beam_type": "B2",
+          "cad_start": [
+            1047.22479,
+            -1475.10068
+          ],
+          "cad_end": [
+            1047.7239,
+            -1475.10068
+          ],
+          "plan_start": [
+            0.46902,
+            0.303154
+          ],
+          "plan_end": [
+            0.480938,
+            0.303154
+          ],
+          "length_m": 0.5,
+          "confidence": 1,
+          "source_handles": "REVIEWED_PURPLE"
+        },
+        {
+          "id": "CAD-L1-020",
+          "beam_type": "B2",
+          "cad_start": [
+            1048.7498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1048.7498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.505434,
+            0.662007
+          ],
+          "plan_end": [
+            0.505434,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "90A7+90A8"
+        },
+        {
+          "id": "CAD-L1-021",
+          "beam_type": "CB6",
+          "cad_start": [
+            1050.97479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1050.97479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.558562,
+            0.662007
+          ],
+          "plan_end": [
+            0.558562,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "9062+9063"
+        },
+        {
+          "id": "CAD-L1-022",
+          "beam_type": "B6",
+          "cad_start": [
+            1050.97479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1050.97479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.558562,
+            0.602338
+          ],
+          "plan_end": [
+            0.558562,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "9064+9065"
+        },
+        {
+          "id": "CAD-L1-023",
+          "beam_type": "B3",
+          "cad_start": [
+            1050.97479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1050.97479,
+            -1478.20068
+          ],
+          "plan_start": [
+            0.558562,
+            0.471235
+          ],
+          "plan_end": [
+            0.558562,
+            0.407364
+          ],
+          "length_m": 1.9,
+          "confidence": 0.98,
+          "source_handles": "9066+9067"
+        },
+        {
+          "id": "CAD-L1-024",
+          "beam_type": "B4",
+          "cad_start": [
+            1050.97479,
+            -1478.20068
+          ],
+          "cad_end": [
+            1050.97479,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.558562,
+            0.407364
+          ],
+          "plan_end": [
+            0.558562,
+            0.272899
+          ],
+          "length_m": 4,
+          "confidence": 0.98,
+          "source_handles": "906A+9069+9068+906D+906C+906B"
+        },
+        {
+          "id": "CAD-L1-025",
+          "beam_type": "B2",
+          "cad_start": [
+            1053.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1053.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.611689,
+            0.662007
+          ],
+          "plan_end": [
+            0.611689,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "90A9+90AA"
+        },
+        {
+          "id": "CAD-L1-026",
+          "beam_type": null,
+          "cad_start": [
+            1054.74979,
+            -1485.87568
+          ],
+          "cad_end": [
+            1054.74979,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.6487,
+            0.665368
+          ],
+          "plan_end": [
+            0.6487,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.45,
+          "source_handles": "906F+9070"
+        },
+        {
+          "id": "CAD-L1-027",
+          "beam_type": null,
+          "cad_start": [
+            1054.74979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1054.74979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.6487,
+            0.602338
+          ],
+          "plan_end": [
+            0.6487,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.45,
+          "source_handles": "9071+9072"
+        },
+        {
+          "id": "CAD-L1-028",
+          "beam_type": null,
+          "cad_start": [
+            1054.74979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1054.74979,
+            -1478.20068
+          ],
+          "plan_start": [
+            0.6487,
+            0.471235
+          ],
+          "plan_end": [
+            0.6487,
+            0.407364
+          ],
+          "length_m": 1.9,
+          "confidence": 0.45,
+          "source_handles": "9073+9074"
+        },
+        {
+          "id": "CAD-L1-029",
+          "beam_type": null,
+          "cad_start": [
+            1054.74979,
+            -1478.20068
+          ],
+          "cad_end": [
+            1054.74979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.6487,
+            0.407364
+          ],
+          "plan_end": [
+            0.6487,
+            0.272899
+          ],
+          "length_m": 4,
+          "confidence": 0.45,
+          "source_handles": "9077+9076+9075+9078"
+        },
+        {
+          "id": "CAD-L1-030",
+          "beam_type": "B2",
+          "cad_start": [
+            1035.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1039.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.1998,
+            0.666209
+          ],
+          "plan_end": [
+            0.289341,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-032",
+          "beam_type": "B2",
+          "cad_start": [
+            1039.6998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1043.4498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.289341,
+            0.666209
+          ],
+          "plan_end": [
+            0.378882,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-034",
+          "beam_type": "B2",
+          "cad_start": [
+            1043.4498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1047.1998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.378882,
+            0.666209
+          ],
+          "plan_end": [
+            0.468424,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-036",
+          "beam_type": "B2",
+          "cad_start": [
+            1047.1998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1050.9498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.468424,
+            0.666209
+          ],
+          "plan_end": [
+            0.557965,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-038",
+          "beam_type": "B2",
+          "cad_start": [
+            1050.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1054.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.557965,
+            0.666209
+          ],
+          "plan_end": [
+            0.647506,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-040",
+          "beam_type": "B3",
+          "cad_start": [
+            1035.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1039.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.6057
+          ],
+          "plan_end": [
+            0.289341,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-041",
+          "beam_type": "B3",
+          "cad_start": [
+            1039.6998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1043.4498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.6057
+          ],
+          "plan_end": [
+            0.378882,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-042",
+          "beam_type": "B3",
+          "cad_start": [
+            1043.4498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1047.1998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.6057
+          ],
+          "plan_end": [
+            0.468424,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-043",
+          "beam_type": "B3",
+          "cad_start": [
+            1047.1998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1050.9498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.6057
+          ],
+          "plan_end": [
+            0.557965,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-044",
+          "beam_type": "B3",
+          "cad_start": [
+            1050.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1054.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.6057
+          ],
+          "plan_end": [
+            0.647506,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-045",
+          "beam_type": "B3",
+          "cad_start": [
+            1035.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1039.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.289341,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-046",
+          "beam_type": "B3",
+          "cad_start": [
+            1039.6998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1043.4498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.471235
+          ],
+          "plan_end": [
+            0.378882,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-047",
+          "beam_type": "B3",
+          "cad_start": [
+            1043.4498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1047.1998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.471235
+          ],
+          "plan_end": [
+            0.468424,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-048",
+          "beam_type": "B3",
+          "cad_start": [
+            1047.1998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1050.9498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.471235
+          ],
+          "plan_end": [
+            0.557965,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-049",
+          "beam_type": "B3",
+          "cad_start": [
+            1050.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1054.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.471235
+          ],
+          "plan_end": [
+            0.647506,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-050",
+          "beam_type": "B3",
+          "cad_start": [
+            1035.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1039.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.1998,
+            0.407365
+          ],
+          "plan_end": [
+            0.289341,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-051",
+          "beam_type": "B3",
+          "cad_start": [
+            1039.6998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1043.4498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.407365
+          ],
+          "plan_end": [
+            0.378882,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-052",
+          "beam_type": "B3",
+          "cad_start": [
+            1043.4498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1047.1998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.407365
+          ],
+          "plan_end": [
+            0.468424,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-053",
+          "beam_type": "B3",
+          "cad_start": [
+            1047.1998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1050.9498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.407365
+          ],
+          "plan_end": [
+            0.557965,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-054",
+          "beam_type": "B3",
+          "cad_start": [
+            1050.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1054.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.407365
+          ],
+          "plan_end": [
+            0.647506,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-060",
+          "beam_type": "B3",
+          "cad_start": [
+            1039.6998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1043.4498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.2729
+          ],
+          "plan_end": [
+            0.378882,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-061",
+          "beam_type": "B3",
+          "cad_start": [
+            1043.4498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1047.1998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.2729
+          ],
+          "plan_end": [
+            0.468424,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-062",
+          "beam_type": "B3",
+          "cad_start": [
+            1047.1998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1050.9498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.2729
+          ],
+          "plan_end": [
+            0.557965,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L1-063",
+          "beam_type": "B3",
+          "cad_start": [
+            1050.9498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1054.6998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.2729
+          ],
+          "plan_end": [
+            0.647506,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        }
+      ]
+    },
+    "2": {
+      "count": 55,
+      "labeled": 51,
+      "accepted": 51,
+      "total_length_m": 169.175,
+      "beams": [
+        {
+          "id": "CAD-L2-001",
+          "beam_type": "B4",
+          "cad_start": [
+            1077.94979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1077.94979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.1998,
+            0.602338
+          ],
+          "plan_end": [
+            0.1998,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "92FB+92FA"
+        },
+        {
+          "id": "CAD-L2-002",
+          "beam_type": "B3",
+          "cad_start": [
+            1077.94979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1077.94979,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.1998,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "92F9+92F8"
+        },
+        {
+          "id": "CAD-L2-003",
+          "beam_type": "CB4",
+          "cad_start": [
+            1077.94982,
+            -1485.87568
+          ],
+          "cad_end": [
+            1077.94982,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.1998,
+            0.665368
+          ],
+          "plan_end": [
+            0.1998,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.98,
+          "source_handles": "92FD+92FC"
+        },
+        {
+          "id": "CAD-L2-004",
+          "beam_type": "B2",
+          "cad_start": [
+            1080.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1080.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.253524,
+            0.662007
+          ],
+          "plan_end": [
+            0.253524,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "9348+9349"
+        },
+        {
+          "id": "CAD-L2-005",
+          "beam_type": "B5",
+          "cad_start": [
+            1081.69979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1081.69979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.289341,
+            0.410516
+          ],
+          "plan_end": [
+            0.289341,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "92FF+92FE"
+        },
+        {
+          "id": "CAD-L2-006",
+          "beam_type": "CB6",
+          "cad_start": [
+            1081.72479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1081.72479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.289938,
+            0.662007
+          ],
+          "plan_end": [
+            0.289938,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "9306+9305"
+        },
+        {
+          "id": "CAD-L2-007",
+          "beam_type": "B6",
+          "cad_start": [
+            1081.72479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1081.72479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.289938,
+            0.602338
+          ],
+          "plan_end": [
+            0.289938,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "9303+9302"
+        },
+        {
+          "id": "CAD-L2-008",
+          "beam_type": "B3",
+          "cad_start": [
+            1081.72479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1081.72479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.289938,
+            0.471235
+          ],
+          "plan_end": [
+            0.289938,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "9301+9300"
+        },
+        {
+          "id": "CAD-L2-009",
+          "beam_type": "B2",
+          "cad_start": [
+            1083.2498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1083.2498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.326352,
+            0.662007
+          ],
+          "plan_end": [
+            0.326352,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "934A+934B"
+        },
+        {
+          "id": "CAD-L2-010",
+          "beam_type": "CB6",
+          "cad_start": [
+            1085.47479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1085.47479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.379479,
+            0.662007
+          ],
+          "plan_end": [
+            0.379479,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "930F+930E"
+        },
+        {
+          "id": "CAD-L2-011",
+          "beam_type": "B6",
+          "cad_start": [
+            1085.47479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1085.47479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.379479,
+            0.602338
+          ],
+          "plan_end": [
+            0.379479,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "930C+930B"
+        },
+        {
+          "id": "CAD-L2-012",
+          "beam_type": "B3",
+          "cad_start": [
+            1085.47479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1085.47479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.379479,
+            0.471235
+          ],
+          "plan_end": [
+            0.379479,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "930A+9309"
+        },
+        {
+          "id": "CAD-L2-013",
+          "beam_type": "B5",
+          "cad_start": [
+            1085.49979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1085.49979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.380076,
+            0.410516
+          ],
+          "plan_end": [
+            0.380076,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "9308+9307"
+        },
+        {
+          "id": "CAD-L2-014",
+          "beam_type": "B2",
+          "cad_start": [
+            1087.69978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1087.69978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.432607,
+            0.662007
+          ],
+          "plan_end": [
+            0.432607,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "934C+934D"
+        },
+        {
+          "id": "CAD-L2-015",
+          "beam_type": "B5",
+          "cad_start": [
+            1089.19979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1089.19979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.468423,
+            0.410516
+          ],
+          "plan_end": [
+            0.468423,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "9317+9319+9318"
+        },
+        {
+          "id": "CAD-L2-016",
+          "beam_type": "CB6",
+          "cad_start": [
+            1089.22479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1089.22479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.46902,
+            0.662007
+          ],
+          "plan_end": [
+            0.46902,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "9311+9312"
+        },
+        {
+          "id": "CAD-L2-017",
+          "beam_type": "B6",
+          "cad_start": [
+            1089.22479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1089.22479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.46902,
+            0.602338
+          ],
+          "plan_end": [
+            0.46902,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "9313+9314"
+        },
+        {
+          "id": "CAD-L2-018",
+          "beam_type": "B3",
+          "cad_start": [
+            1089.22479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1089.22479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.46902,
+            0.471235
+          ],
+          "plan_end": [
+            0.46902,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "9315+9316"
+        },
+        {
+          "id": "CAD-L2-019",
+          "beam_type": "B2",
+          "cad_start": [
+            1090.7498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1090.7498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.505434,
+            0.662007
+          ],
+          "plan_end": [
+            0.505434,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "934E+934F"
+        },
+        {
+          "id": "CAD-L2-020",
+          "beam_type": "B2",
+          "cad_start": [
+            1091.09979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1091.09979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.513791,
+            0.410516
+          ],
+          "plan_end": [
+            0.513791,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "9378+937A+9379+937B"
+        },
+        {
+          "id": "CAD-L2-021",
+          "beam_type": "CB6",
+          "cad_start": [
+            1092.97479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1092.97479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.558562,
+            0.662007
+          ],
+          "plan_end": [
+            0.558562,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "931B+931C"
+        },
+        {
+          "id": "CAD-L2-022",
+          "beam_type": "B6",
+          "cad_start": [
+            1092.97479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1092.97479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.558562,
+            0.602338
+          ],
+          "plan_end": [
+            0.558562,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "931D+931E"
+        },
+        {
+          "id": "CAD-L2-023",
+          "beam_type": "B3",
+          "cad_start": [
+            1092.97479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1092.97479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.558562,
+            0.471235
+          ],
+          "plan_end": [
+            0.558562,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "931F+9320"
+        },
+        {
+          "id": "CAD-L2-024",
+          "beam_type": "B5",
+          "cad_start": [
+            1092.97479,
+            -1478.29443
+          ],
+          "cad_end": [
+            1092.97479,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.558562,
+            0.410516
+          ],
+          "plan_end": [
+            0.558562,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "9322+9321+9323"
+        },
+        {
+          "id": "CAD-L2-025",
+          "beam_type": "B2",
+          "cad_start": [
+            1095.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1095.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.611689,
+            0.662007
+          ],
+          "plan_end": [
+            0.611689,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "9350+9351"
+        },
+        {
+          "id": "CAD-L2-026",
+          "beam_type": null,
+          "cad_start": [
+            1096.74979,
+            -1485.87568
+          ],
+          "cad_end": [
+            1096.74979,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.6487,
+            0.665368
+          ],
+          "plan_end": [
+            0.6487,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.45,
+          "source_handles": "9325+9326"
+        },
+        {
+          "id": "CAD-L2-027",
+          "beam_type": null,
+          "cad_start": [
+            1096.74979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1096.74979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.6487,
+            0.602338
+          ],
+          "plan_end": [
+            0.6487,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.45,
+          "source_handles": "9327+9328"
+        },
+        {
+          "id": "CAD-L2-028",
+          "beam_type": null,
+          "cad_start": [
+            1096.74979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1096.74979,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.6487,
+            0.471235
+          ],
+          "plan_end": [
+            0.6487,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.45,
+          "source_handles": "9329+932A"
+        },
+        {
+          "id": "CAD-L2-029",
+          "beam_type": null,
+          "cad_start": [
+            1096.74979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1096.74979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.6487,
+            0.410516
+          ],
+          "plan_end": [
+            0.6487,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.45,
+          "source_handles": "932B+932C"
+        },
+        {
+          "id": "CAD-L2-030",
+          "beam_type": "B2",
+          "cad_start": [
+            1077.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1081.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.1998,
+            0.666209
+          ],
+          "plan_end": [
+            0.289341,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-032",
+          "beam_type": "B2",
+          "cad_start": [
+            1081.6998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1085.4498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.289341,
+            0.666209
+          ],
+          "plan_end": [
+            0.378882,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-034",
+          "beam_type": "B2",
+          "cad_start": [
+            1085.4498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1089.1998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.378882,
+            0.666209
+          ],
+          "plan_end": [
+            0.468424,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-036",
+          "beam_type": "B2",
+          "cad_start": [
+            1089.1998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1092.9498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.468424,
+            0.666209
+          ],
+          "plan_end": [
+            0.557965,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-038",
+          "beam_type": "B2",
+          "cad_start": [
+            1092.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1096.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.557965,
+            0.666209
+          ],
+          "plan_end": [
+            0.647506,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-040",
+          "beam_type": "B3",
+          "cad_start": [
+            1077.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1081.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.6057
+          ],
+          "plan_end": [
+            0.289341,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-041",
+          "beam_type": "B3",
+          "cad_start": [
+            1081.6998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1085.4498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.6057
+          ],
+          "plan_end": [
+            0.378882,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-042",
+          "beam_type": "B3",
+          "cad_start": [
+            1085.4498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1089.1998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.6057
+          ],
+          "plan_end": [
+            0.468424,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-043",
+          "beam_type": "B3",
+          "cad_start": [
+            1089.1998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1092.9498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.6057
+          ],
+          "plan_end": [
+            0.557965,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-044",
+          "beam_type": "B3",
+          "cad_start": [
+            1092.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1096.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.6057
+          ],
+          "plan_end": [
+            0.647506,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-045",
+          "beam_type": "B3",
+          "cad_start": [
+            1077.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1081.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.289341,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-046",
+          "beam_type": "B3",
+          "cad_start": [
+            1081.6998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1085.4498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.471235
+          ],
+          "plan_end": [
+            0.378882,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-047",
+          "beam_type": "B3",
+          "cad_start": [
+            1085.4498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1089.1998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.471235
+          ],
+          "plan_end": [
+            0.468424,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-048",
+          "beam_type": "B3",
+          "cad_start": [
+            1089.1998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1092.9498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.471235
+          ],
+          "plan_end": [
+            0.557965,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-049",
+          "beam_type": "B3",
+          "cad_start": [
+            1092.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1096.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.471235
+          ],
+          "plan_end": [
+            0.647506,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-050",
+          "beam_type": "B3",
+          "cad_start": [
+            1077.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1081.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.1998,
+            0.407365
+          ],
+          "plan_end": [
+            0.289341,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-051",
+          "beam_type": "B3",
+          "cad_start": [
+            1081.6998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1085.4498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.407365
+          ],
+          "plan_end": [
+            0.378882,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-052",
+          "beam_type": "B3",
+          "cad_start": [
+            1085.4498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1089.1998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.407365
+          ],
+          "plan_end": [
+            0.468424,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-053",
+          "beam_type": "B3",
+          "cad_start": [
+            1089.1998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1092.9498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.407365
+          ],
+          "plan_end": [
+            0.557965,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-054",
+          "beam_type": "B3",
+          "cad_start": [
+            1092.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1096.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.407365
+          ],
+          "plan_end": [
+            0.647506,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-055",
+          "beam_type": "B4",
+          "cad_start": [
+            1089.1998,
+            -1476.2007
+          ],
+          "cad_end": [
+            1091.0748,
+            -1476.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.340132
+          ],
+          "plan_end": [
+            0.513194,
+            0.340132
+          ],
+          "length_m": 1.875,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-056",
+          "beam_type": "B4",
+          "cad_start": [
+            1091.0748,
+            -1476.2007
+          ],
+          "cad_end": [
+            1092.9498,
+            -1476.2007
+          ],
+          "plan_start": [
+            0.513194,
+            0.340132
+          ],
+          "plan_end": [
+            0.557965,
+            0.340132
+          ],
+          "length_m": 1.875,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-057",
+          "beam_type": "B3",
+          "cad_start": [
+            1081.6998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1085.4498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.2729
+          ],
+          "plan_end": [
+            0.378882,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-058",
+          "beam_type": "B3",
+          "cad_start": [
+            1085.4498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1089.1998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.2729
+          ],
+          "plan_end": [
+            0.468424,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-059",
+          "beam_type": "B3",
+          "cad_start": [
+            1089.1998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1092.9498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.2729
+          ],
+          "plan_end": [
+            0.557965,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L2-060",
+          "beam_type": "B3",
+          "cad_start": [
+            1092.9498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1096.6998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.2729
+          ],
+          "plan_end": [
+            0.647506,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        }
+      ]
+    },
+    "3": {
+      "count": 55,
+      "labeled": 51,
+      "accepted": 51,
+      "total_length_m": 169.175,
+      "beams": [
+        {
+          "id": "CAD-L3-001",
+          "beam_type": "B4",
+          "cad_start": [
+            1119.94979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1119.94979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.1998,
+            0.602338
+          ],
+          "plan_end": [
+            0.1998,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "748E7+748E6"
+        },
+        {
+          "id": "CAD-L3-002",
+          "beam_type": "B3",
+          "cad_start": [
+            1119.94979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1119.94979,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.1998,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "748E5+748E4"
+        },
+        {
+          "id": "CAD-L3-003",
+          "beam_type": "CB4",
+          "cad_start": [
+            1119.94982,
+            -1485.87568
+          ],
+          "cad_end": [
+            1119.94982,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.1998,
+            0.665368
+          ],
+          "plan_end": [
+            0.1998,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.98,
+          "source_handles": "748E9+748E8"
+        },
+        {
+          "id": "CAD-L3-004",
+          "beam_type": "B2",
+          "cad_start": [
+            1122.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1122.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.253524,
+            0.662007
+          ],
+          "plan_end": [
+            0.253524,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74934+74935"
+        },
+        {
+          "id": "CAD-L3-005",
+          "beam_type": "B5",
+          "cad_start": [
+            1123.69979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1123.69979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.289341,
+            0.410516
+          ],
+          "plan_end": [
+            0.289341,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "748EB+748EA"
+        },
+        {
+          "id": "CAD-L3-006",
+          "beam_type": "CB6",
+          "cad_start": [
+            1123.72479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1123.72479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.289938,
+            0.662007
+          ],
+          "plan_end": [
+            0.289938,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "748F2+748F1"
+        },
+        {
+          "id": "CAD-L3-007",
+          "beam_type": "B6",
+          "cad_start": [
+            1123.72479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1123.72479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.289938,
+            0.602338
+          ],
+          "plan_end": [
+            0.289938,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "748EF+748EE"
+        },
+        {
+          "id": "CAD-L3-008",
+          "beam_type": "B3",
+          "cad_start": [
+            1123.72479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1123.72479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.289938,
+            0.471235
+          ],
+          "plan_end": [
+            0.289938,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "748ED+748EC"
+        },
+        {
+          "id": "CAD-L3-009",
+          "beam_type": "B2",
+          "cad_start": [
+            1125.2498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1125.2498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.326352,
+            0.662007
+          ],
+          "plan_end": [
+            0.326352,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74936+74937"
+        },
+        {
+          "id": "CAD-L3-010",
+          "beam_type": "CB6",
+          "cad_start": [
+            1127.47479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1127.47479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.379479,
+            0.662007
+          ],
+          "plan_end": [
+            0.379479,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "748FB+748FA"
+        },
+        {
+          "id": "CAD-L3-011",
+          "beam_type": "B6",
+          "cad_start": [
+            1127.47479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1127.47479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.379479,
+            0.602338
+          ],
+          "plan_end": [
+            0.379479,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "748F8+748F7"
+        },
+        {
+          "id": "CAD-L3-012",
+          "beam_type": "B3",
+          "cad_start": [
+            1127.47479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1127.47479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.379479,
+            0.471235
+          ],
+          "plan_end": [
+            0.379479,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "748F6+748F5"
+        },
+        {
+          "id": "CAD-L3-013",
+          "beam_type": "B5",
+          "cad_start": [
+            1127.49979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1127.49979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.380076,
+            0.410516
+          ],
+          "plan_end": [
+            0.380076,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "748F4+748F3"
+        },
+        {
+          "id": "CAD-L3-014",
+          "beam_type": "B2",
+          "cad_start": [
+            1129.69978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1129.69978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.432607,
+            0.662007
+          ],
+          "plan_end": [
+            0.432607,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74938+74939"
+        },
+        {
+          "id": "CAD-L3-015",
+          "beam_type": "B5",
+          "cad_start": [
+            1131.19979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1131.19979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.468423,
+            0.410516
+          ],
+          "plan_end": [
+            0.468423,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74903+74905+74904"
+        },
+        {
+          "id": "CAD-L3-016",
+          "beam_type": "CB6",
+          "cad_start": [
+            1131.22479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1131.22479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.46902,
+            0.662007
+          ],
+          "plan_end": [
+            0.46902,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "748FD+748FE"
+        },
+        {
+          "id": "CAD-L3-017",
+          "beam_type": "B6",
+          "cad_start": [
+            1131.22479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1131.22479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.46902,
+            0.602338
+          ],
+          "plan_end": [
+            0.46902,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "748FF+74900"
+        },
+        {
+          "id": "CAD-L3-018",
+          "beam_type": "B3",
+          "cad_start": [
+            1131.22479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1131.22479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.46902,
+            0.471235
+          ],
+          "plan_end": [
+            0.46902,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "74901+74902"
+        },
+        {
+          "id": "CAD-L3-019",
+          "beam_type": "B2",
+          "cad_start": [
+            1132.7498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1132.7498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.505434,
+            0.662007
+          ],
+          "plan_end": [
+            0.505434,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "7493A+7493B"
+        },
+        {
+          "id": "CAD-L3-020",
+          "beam_type": "B2",
+          "cad_start": [
+            1133.09979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1133.09979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.513791,
+            0.410516
+          ],
+          "plan_end": [
+            0.513791,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74964+74966+74965+74967"
+        },
+        {
+          "id": "CAD-L3-021",
+          "beam_type": "CB6",
+          "cad_start": [
+            1134.97479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1134.97479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.558562,
+            0.662007
+          ],
+          "plan_end": [
+            0.558562,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "74907+74908"
+        },
+        {
+          "id": "CAD-L3-022",
+          "beam_type": "B6",
+          "cad_start": [
+            1134.97479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1134.97479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.558562,
+            0.602338
+          ],
+          "plan_end": [
+            0.558562,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74909+7490A"
+        },
+        {
+          "id": "CAD-L3-023",
+          "beam_type": "B3",
+          "cad_start": [
+            1134.97479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1134.97479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.558562,
+            0.471235
+          ],
+          "plan_end": [
+            0.558562,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "7490B+7490C"
+        },
+        {
+          "id": "CAD-L3-024",
+          "beam_type": "B5",
+          "cad_start": [
+            1134.97479,
+            -1478.29443
+          ],
+          "cad_end": [
+            1134.97479,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.558562,
+            0.410516
+          ],
+          "plan_end": [
+            0.558562,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "7490E+7490D+7490F"
+        },
+        {
+          "id": "CAD-L3-025",
+          "beam_type": "B2",
+          "cad_start": [
+            1137.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1137.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.611689,
+            0.662007
+          ],
+          "plan_end": [
+            0.611689,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "7493C+7493D"
+        },
+        {
+          "id": "CAD-L3-026",
+          "beam_type": null,
+          "cad_start": [
+            1138.74979,
+            -1485.87568
+          ],
+          "cad_end": [
+            1138.74979,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.6487,
+            0.665368
+          ],
+          "plan_end": [
+            0.6487,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.45,
+          "source_handles": "74911+74912"
+        },
+        {
+          "id": "CAD-L3-027",
+          "beam_type": null,
+          "cad_start": [
+            1138.74979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1138.74979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.6487,
+            0.602338
+          ],
+          "plan_end": [
+            0.6487,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.45,
+          "source_handles": "74913+74914"
+        },
+        {
+          "id": "CAD-L3-028",
+          "beam_type": null,
+          "cad_start": [
+            1138.74979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1138.74979,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.6487,
+            0.471235
+          ],
+          "plan_end": [
+            0.6487,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.45,
+          "source_handles": "74915+74916"
+        },
+        {
+          "id": "CAD-L3-029",
+          "beam_type": null,
+          "cad_start": [
+            1138.74979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1138.74979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.6487,
+            0.410516
+          ],
+          "plan_end": [
+            0.6487,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.45,
+          "source_handles": "74917+74918"
+        },
+        {
+          "id": "CAD-L3-030",
+          "beam_type": "B2",
+          "cad_start": [
+            1119.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1123.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.1998,
+            0.666209
+          ],
+          "plan_end": [
+            0.289341,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-032",
+          "beam_type": "B2",
+          "cad_start": [
+            1123.6998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1127.4498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.289341,
+            0.666209
+          ],
+          "plan_end": [
+            0.378882,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-034",
+          "beam_type": "B2",
+          "cad_start": [
+            1127.4498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1131.1998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.378882,
+            0.666209
+          ],
+          "plan_end": [
+            0.468424,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-036",
+          "beam_type": "B2",
+          "cad_start": [
+            1131.1998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1134.9498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.468424,
+            0.666209
+          ],
+          "plan_end": [
+            0.557965,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-038",
+          "beam_type": "B2",
+          "cad_start": [
+            1134.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1138.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.557965,
+            0.666209
+          ],
+          "plan_end": [
+            0.647506,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-040",
+          "beam_type": "B3",
+          "cad_start": [
+            1119.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1123.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.6057
+          ],
+          "plan_end": [
+            0.289341,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-041",
+          "beam_type": "B3",
+          "cad_start": [
+            1123.6998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1127.4498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.6057
+          ],
+          "plan_end": [
+            0.378882,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-042",
+          "beam_type": "B3",
+          "cad_start": [
+            1127.4498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1131.1998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.6057
+          ],
+          "plan_end": [
+            0.468424,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-043",
+          "beam_type": "B3",
+          "cad_start": [
+            1131.1998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1134.9498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.6057
+          ],
+          "plan_end": [
+            0.557965,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-044",
+          "beam_type": "B3",
+          "cad_start": [
+            1134.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1138.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.6057
+          ],
+          "plan_end": [
+            0.647506,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-045",
+          "beam_type": "B3",
+          "cad_start": [
+            1119.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1123.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.289341,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-046",
+          "beam_type": "B3",
+          "cad_start": [
+            1123.6998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1127.4498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.471235
+          ],
+          "plan_end": [
+            0.378882,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-047",
+          "beam_type": "B3",
+          "cad_start": [
+            1127.4498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1131.1998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.471235
+          ],
+          "plan_end": [
+            0.468424,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-048",
+          "beam_type": "B3",
+          "cad_start": [
+            1131.1998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1134.9498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.471235
+          ],
+          "plan_end": [
+            0.557965,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-049",
+          "beam_type": "B3",
+          "cad_start": [
+            1134.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1138.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.471235
+          ],
+          "plan_end": [
+            0.647506,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-050",
+          "beam_type": "B3",
+          "cad_start": [
+            1119.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1123.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.1998,
+            0.407365
+          ],
+          "plan_end": [
+            0.289341,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-051",
+          "beam_type": "B3",
+          "cad_start": [
+            1123.6998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1127.4498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.407365
+          ],
+          "plan_end": [
+            0.378882,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-052",
+          "beam_type": "B3",
+          "cad_start": [
+            1127.4498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1131.1998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.407365
+          ],
+          "plan_end": [
+            0.468424,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-053",
+          "beam_type": "B3",
+          "cad_start": [
+            1131.1998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1134.9498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.407365
+          ],
+          "plan_end": [
+            0.557965,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-054",
+          "beam_type": "B3",
+          "cad_start": [
+            1134.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1138.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.407365
+          ],
+          "plan_end": [
+            0.647506,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-055",
+          "beam_type": "B4",
+          "cad_start": [
+            1131.1998,
+            -1476.2007
+          ],
+          "cad_end": [
+            1133.0748,
+            -1476.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.340132
+          ],
+          "plan_end": [
+            0.513194,
+            0.340132
+          ],
+          "length_m": 1.875,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-056",
+          "beam_type": "B4",
+          "cad_start": [
+            1133.0748,
+            -1476.2007
+          ],
+          "cad_end": [
+            1134.9498,
+            -1476.2007
+          ],
+          "plan_start": [
+            0.513194,
+            0.340132
+          ],
+          "plan_end": [
+            0.557965,
+            0.340132
+          ],
+          "length_m": 1.875,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-057",
+          "beam_type": "B3",
+          "cad_start": [
+            1123.6998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1127.4498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.2729
+          ],
+          "plan_end": [
+            0.378882,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-058",
+          "beam_type": "B3",
+          "cad_start": [
+            1127.4498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1131.1998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.2729
+          ],
+          "plan_end": [
+            0.468424,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-059",
+          "beam_type": "B3",
+          "cad_start": [
+            1131.1998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1134.9498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.2729
+          ],
+          "plan_end": [
+            0.557965,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L3-060",
+          "beam_type": "B3",
+          "cad_start": [
+            1134.9498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1138.6998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.2729
+          ],
+          "plan_end": [
+            0.647506,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        }
+      ]
+    },
+    "4": {
+      "count": 55,
+      "labeled": 52,
+      "accepted": 52,
+      "total_length_m": 169.175,
+      "beams": [
+        {
+          "id": "CAD-L4-001",
+          "beam_type": "B4",
+          "cad_start": [
+            1161.94979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1161.94979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.1998,
+            0.602338
+          ],
+          "plan_end": [
+            0.1998,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74A8A+74A89"
+        },
+        {
+          "id": "CAD-L4-002",
+          "beam_type": "B3",
+          "cad_start": [
+            1161.94979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1161.94979,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.1998,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "74A88+74A87"
+        },
+        {
+          "id": "CAD-L4-003",
+          "beam_type": "CB4",
+          "cad_start": [
+            1161.94982,
+            -1485.87568
+          ],
+          "cad_end": [
+            1161.94982,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.1998,
+            0.665368
+          ],
+          "plan_end": [
+            0.1998,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.98,
+          "source_handles": "74A8C+74A8B"
+        },
+        {
+          "id": "CAD-L4-004",
+          "beam_type": "B2",
+          "cad_start": [
+            1164.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1164.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.253524,
+            0.662007
+          ],
+          "plan_end": [
+            0.253524,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74AD7+74AD8"
+        },
+        {
+          "id": "CAD-L4-005",
+          "beam_type": "B5",
+          "cad_start": [
+            1165.69979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1165.69979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.289341,
+            0.410516
+          ],
+          "plan_end": [
+            0.289341,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74A8E+74A8D"
+        },
+        {
+          "id": "CAD-L4-006",
+          "beam_type": "CB6",
+          "cad_start": [
+            1165.72479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1165.72479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.289938,
+            0.662007
+          ],
+          "plan_end": [
+            0.289938,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "74A95+74A94"
+        },
+        {
+          "id": "CAD-L4-007",
+          "beam_type": "B6",
+          "cad_start": [
+            1165.72479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1165.72479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.289938,
+            0.602338
+          ],
+          "plan_end": [
+            0.289938,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74A92+74A91"
+        },
+        {
+          "id": "CAD-L4-008",
+          "beam_type": "B3",
+          "cad_start": [
+            1165.72479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1165.72479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.289938,
+            0.471235
+          ],
+          "plan_end": [
+            0.289938,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "74A90+74A8F"
+        },
+        {
+          "id": "CAD-L4-009",
+          "beam_type": "B2",
+          "cad_start": [
+            1167.2498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1167.2498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.326352,
+            0.662007
+          ],
+          "plan_end": [
+            0.326352,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74AD9+74ADA"
+        },
+        {
+          "id": "CAD-L4-010",
+          "beam_type": "CB6",
+          "cad_start": [
+            1169.47479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1169.47479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.379479,
+            0.662007
+          ],
+          "plan_end": [
+            0.379479,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "74A9E+74A9D"
+        },
+        {
+          "id": "CAD-L4-011",
+          "beam_type": "B6",
+          "cad_start": [
+            1169.47479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1169.47479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.379479,
+            0.602338
+          ],
+          "plan_end": [
+            0.379479,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74A9B+74A9A"
+        },
+        {
+          "id": "CAD-L4-012",
+          "beam_type": "B3",
+          "cad_start": [
+            1169.47479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1169.47479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.379479,
+            0.471235
+          ],
+          "plan_end": [
+            0.379479,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "74A99+74A98"
+        },
+        {
+          "id": "CAD-L4-013",
+          "beam_type": "B5",
+          "cad_start": [
+            1169.49979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1169.49979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.380076,
+            0.410516
+          ],
+          "plan_end": [
+            0.380076,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74A97+74A96"
+        },
+        {
+          "id": "CAD-L4-014",
+          "beam_type": "B2",
+          "cad_start": [
+            1171.69978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1171.69978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.432607,
+            0.662007
+          ],
+          "plan_end": [
+            0.432607,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74ADB+74ADC"
+        },
+        {
+          "id": "CAD-L4-015",
+          "beam_type": "B5",
+          "cad_start": [
+            1173.19979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1173.19979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.468423,
+            0.410516
+          ],
+          "plan_end": [
+            0.468423,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74AA6+74AA8+74AA7"
+        },
+        {
+          "id": "CAD-L4-016",
+          "beam_type": "CB6",
+          "cad_start": [
+            1173.22479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1173.22479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.46902,
+            0.662007
+          ],
+          "plan_end": [
+            0.46902,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "74AA0+74AA1"
+        },
+        {
+          "id": "CAD-L4-017",
+          "beam_type": "B6",
+          "cad_start": [
+            1173.22479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1173.22479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.46902,
+            0.602338
+          ],
+          "plan_end": [
+            0.46902,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74AA2+74AA3"
+        },
+        {
+          "id": "CAD-L4-018",
+          "beam_type": "B3",
+          "cad_start": [
+            1173.22479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1173.22479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.46902,
+            0.471235
+          ],
+          "plan_end": [
+            0.46902,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "74AA4+74AA5"
+        },
+        {
+          "id": "CAD-L4-019",
+          "beam_type": "B2",
+          "cad_start": [
+            1174.7498,
+            -1485.77568
+          ],
+          "cad_end": [
+            1174.7498,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.505434,
+            0.662007
+          ],
+          "plan_end": [
+            0.505434,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74ADD+74ADE"
+        },
+        {
+          "id": "CAD-L4-020",
+          "beam_type": "B2",
+          "cad_start": [
+            1175.09979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1175.09979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.513791,
+            0.410516
+          ],
+          "plan_end": [
+            0.513791,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74B07+74B09+74B08+74B0A"
+        },
+        {
+          "id": "CAD-L4-021",
+          "beam_type": "CB6",
+          "cad_start": [
+            1176.97479,
+            -1485.77568
+          ],
+          "cad_end": [
+            1176.97479,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.558562,
+            0.662007
+          ],
+          "plan_end": [
+            0.558562,
+            0.614103
+          ],
+          "length_m": 1.425,
+          "confidence": 0.98,
+          "source_handles": "74AAA+74AAB"
+        },
+        {
+          "id": "CAD-L4-022",
+          "beam_type": "B6",
+          "cad_start": [
+            1176.97479,
+            -1484.00068
+          ],
+          "cad_end": [
+            1176.97479,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.558562,
+            0.602338
+          ],
+          "plan_end": [
+            0.558562,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74AAC+74AAD"
+        },
+        {
+          "id": "CAD-L4-023",
+          "beam_type": "B3",
+          "cad_start": [
+            1176.97479,
+            -1480.10068
+          ],
+          "cad_end": [
+            1176.97479,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.558562,
+            0.471235
+          ],
+          "plan_end": [
+            0.558562,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.98,
+          "source_handles": "74AAE+74AAF"
+        },
+        {
+          "id": "CAD-L4-024",
+          "beam_type": "B5",
+          "cad_start": [
+            1176.97479,
+            -1478.29443
+          ],
+          "cad_end": [
+            1176.97479,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.558562,
+            0.410516
+          ],
+          "plan_end": [
+            0.558562,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.98,
+          "source_handles": "74AB1+74AB0+74AB2"
+        },
+        {
+          "id": "CAD-L4-025",
+          "beam_type": "B2",
+          "cad_start": [
+            1179.19978,
+            -1485.77568
+          ],
+          "cad_end": [
+            1179.19978,
+            -1484.20068
+          ],
+          "plan_start": [
+            0.611689,
+            0.662007
+          ],
+          "plan_end": [
+            0.611689,
+            0.609061
+          ],
+          "length_m": 1.575,
+          "confidence": 0.98,
+          "source_handles": "74ADF+74AE0"
+        },
+        {
+          "id": "CAD-L4-026",
+          "beam_type": null,
+          "cad_start": [
+            1180.74979,
+            -1485.87568
+          ],
+          "cad_end": [
+            1180.74979,
+            -1484.35068
+          ],
+          "plan_start": [
+            0.6487,
+            0.665368
+          ],
+          "plan_end": [
+            0.6487,
+            0.614103
+          ],
+          "length_m": 1.525,
+          "confidence": 0.45,
+          "source_handles": "74AB4+74AB5"
+        },
+        {
+          "id": "CAD-L4-027",
+          "beam_type": "B4",
+          "cad_start": [
+            1180.74979,
+            -1484.00068
+          ],
+          "cad_end": [
+            1180.74979,
+            -1480.10068
+          ],
+          "plan_start": [
+            0.6487,
+            0.602338
+          ],
+          "plan_end": [
+            0.6487,
+            0.471235
+          ],
+          "length_m": 3.9,
+          "confidence": 0.98,
+          "source_handles": "74AB6+74AB7"
+        },
+        {
+          "id": "CAD-L4-028",
+          "beam_type": null,
+          "cad_start": [
+            1180.74979,
+            -1480.10068
+          ],
+          "cad_end": [
+            1180.74979,
+            -1478.29443
+          ],
+          "plan_start": [
+            0.6487,
+            0.471235
+          ],
+          "plan_end": [
+            0.6487,
+            0.410516
+          ],
+          "length_m": 1.806,
+          "confidence": 0.45,
+          "source_handles": "74AB8+74AB9"
+        },
+        {
+          "id": "CAD-L4-029",
+          "beam_type": null,
+          "cad_start": [
+            1180.74979,
+            -1478.29443
+          ],
+          "cad_end": [
+            1180.74979,
+            -1474.20068
+          ],
+          "plan_start": [
+            0.6487,
+            0.410516
+          ],
+          "plan_end": [
+            0.6487,
+            0.272899
+          ],
+          "length_m": 4.094,
+          "confidence": 0.45,
+          "source_handles": "74ABA+74ABB"
+        },
+        {
+          "id": "CAD-L4-030",
+          "beam_type": "B2",
+          "cad_start": [
+            1161.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1165.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.1998,
+            0.666209
+          ],
+          "plan_end": [
+            0.289341,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-032",
+          "beam_type": "B2",
+          "cad_start": [
+            1165.6998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1169.4498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.289341,
+            0.666209
+          ],
+          "plan_end": [
+            0.378882,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-034",
+          "beam_type": "B2",
+          "cad_start": [
+            1169.4498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1173.1998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.378882,
+            0.666209
+          ],
+          "plan_end": [
+            0.468424,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-036",
+          "beam_type": "B2",
+          "cad_start": [
+            1173.1998,
+            -1485.9007
+          ],
+          "cad_end": [
+            1176.9498,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.468424,
+            0.666209
+          ],
+          "plan_end": [
+            0.557965,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-038",
+          "beam_type": "B2",
+          "cad_start": [
+            1176.9498,
+            -1485.9007
+          ],
+          "cad_end": [
+            1180.6998,
+            -1485.9007
+          ],
+          "plan_start": [
+            0.557965,
+            0.666209
+          ],
+          "plan_end": [
+            0.647506,
+            0.666209
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-040",
+          "beam_type": "B3",
+          "cad_start": [
+            1161.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1165.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.6057
+          ],
+          "plan_end": [
+            0.289341,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-041",
+          "beam_type": "B3",
+          "cad_start": [
+            1165.6998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1169.4498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.6057
+          ],
+          "plan_end": [
+            0.378882,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-042",
+          "beam_type": "B3",
+          "cad_start": [
+            1169.4498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1173.1998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.6057
+          ],
+          "plan_end": [
+            0.468424,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-043",
+          "beam_type": "B3",
+          "cad_start": [
+            1173.1998,
+            -1484.1007
+          ],
+          "cad_end": [
+            1176.9498,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.6057
+          ],
+          "plan_end": [
+            0.557965,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-044",
+          "beam_type": "B3",
+          "cad_start": [
+            1176.9498,
+            -1484.1007
+          ],
+          "cad_end": [
+            1180.6998,
+            -1484.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.6057
+          ],
+          "plan_end": [
+            0.647506,
+            0.6057
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-045",
+          "beam_type": "B3",
+          "cad_start": [
+            1161.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1165.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.1998,
+            0.471235
+          ],
+          "plan_end": [
+            0.289341,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-046",
+          "beam_type": "B3",
+          "cad_start": [
+            1165.6998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1169.4498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.289341,
+            0.471235
+          ],
+          "plan_end": [
+            0.378882,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-047",
+          "beam_type": "B3",
+          "cad_start": [
+            1169.4498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1173.1998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.378882,
+            0.471235
+          ],
+          "plan_end": [
+            0.468424,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-048",
+          "beam_type": "B3",
+          "cad_start": [
+            1173.1998,
+            -1480.1007
+          ],
+          "cad_end": [
+            1176.9498,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.468424,
+            0.471235
+          ],
+          "plan_end": [
+            0.557965,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-049",
+          "beam_type": "B3",
+          "cad_start": [
+            1176.9498,
+            -1480.1007
+          ],
+          "cad_end": [
+            1180.6998,
+            -1480.1007
+          ],
+          "plan_start": [
+            0.557965,
+            0.471235
+          ],
+          "plan_end": [
+            0.647506,
+            0.471235
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-050",
+          "beam_type": "B3",
+          "cad_start": [
+            1161.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1165.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.1998,
+            0.407365
+          ],
+          "plan_end": [
+            0.289341,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-051",
+          "beam_type": "B3",
+          "cad_start": [
+            1165.6998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1169.4498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.407365
+          ],
+          "plan_end": [
+            0.378882,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-052",
+          "beam_type": "B3",
+          "cad_start": [
+            1169.4498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1173.1998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.407365
+          ],
+          "plan_end": [
+            0.468424,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-053",
+          "beam_type": "B3",
+          "cad_start": [
+            1173.1998,
+            -1478.2007
+          ],
+          "cad_end": [
+            1176.9498,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.407365
+          ],
+          "plan_end": [
+            0.557965,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-054",
+          "beam_type": "B3",
+          "cad_start": [
+            1176.9498,
+            -1478.2007
+          ],
+          "cad_end": [
+            1180.6998,
+            -1478.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.407365
+          ],
+          "plan_end": [
+            0.647506,
+            0.407365
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-055",
+          "beam_type": "B4",
+          "cad_start": [
+            1173.1998,
+            -1476.2007
+          ],
+          "cad_end": [
+            1175.0748,
+            -1476.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.340132
+          ],
+          "plan_end": [
+            0.513194,
+            0.340132
+          ],
+          "length_m": 1.875,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-056",
+          "beam_type": "B4",
+          "cad_start": [
+            1175.0748,
+            -1476.2007
+          ],
+          "cad_end": [
+            1176.9498,
+            -1476.2007
+          ],
+          "plan_start": [
+            0.513194,
+            0.340132
+          ],
+          "plan_end": [
+            0.557965,
+            0.340132
+          ],
+          "length_m": 1.875,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-057",
+          "beam_type": "B3",
+          "cad_start": [
+            1165.6998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1169.4498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.289341,
+            0.2729
+          ],
+          "plan_end": [
+            0.378882,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-058",
+          "beam_type": "B3",
+          "cad_start": [
+            1169.4498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1173.1998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.378882,
+            0.2729
+          ],
+          "plan_end": [
+            0.468424,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-059",
+          "beam_type": "B3",
+          "cad_start": [
+            1173.1998,
+            -1474.2007
+          ],
+          "cad_end": [
+            1176.9498,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.468424,
+            0.2729
+          ],
+          "plan_end": [
+            0.557965,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        },
+        {
+          "id": "CAD-L4-060",
+          "beam_type": "B3",
+          "cad_start": [
+            1176.9498,
+            -1474.2007
+          ],
+          "cad_end": [
+            1180.6998,
+            -1474.2007
+          ],
+          "plan_start": [
+            0.557965,
+            0.2729
+          ],
+          "plan_end": [
+            0.647506,
+            0.2729
+          ],
+          "length_m": 3.75,
+          "confidence": 1,
+          "source_handles": "REVIEWED_BLUEPRINT"
+        }
+      ]
+    }
+  }
+}

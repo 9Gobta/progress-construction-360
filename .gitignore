@@ -1,0 +1,66 @@
+# Source construction data and generated media
+Data/
+storage/
+artifacts/
+output/
+outputs/
+backups/
+
+# Codex/local processing workspaces and runtime state
+.codex_build/
+.codex_tmp/
+.logs/
+.run/
+.runtime/
+*.inspect.ndjson
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+.next-*/
+out/
+coverage/
+*.tsbuildinfo
+
+# Local application state
+.local/
+.runtime/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+
+# Independent/experimental repository; share separately if it becomes required
+real-estate-360-tour/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Temporary files
+.tmp/
+tmp/
+*.log
+
+# Private advisor recordings and unsanitized notes
+docs/advisor-meetings/private/*
+!docs/advisor-meetings/private/.gitkeep

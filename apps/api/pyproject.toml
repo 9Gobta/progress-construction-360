@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "progress-construction-api"
+version = "0.1.0"
+description = "FastAPI backend and workers for Progress Construction AI"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+  "alembic==1.19.1",
+  "boto3>=1.40,<2.0",
+  "celery[redis]==5.6.3",
+  "email-validator>=2.2,<3.0",
+  "ezdxf>=1.4,<2.0",
+  "fastapi[standard]==0.141.1",
+  "ifcopenshell>=0.8.5,<0.9",
+  "openpyxl==3.1.5",
+  "PyMuPDF>=1.26,<2.0",
+  "numpy>=2.0,<3.0",
+  "opencv-python-headless>=4.10,<5.0",
+  "psycopg[binary]>=3.2,<4.0",
+  "pycolmap==3.13.0",
+  "pydantic-settings>=2.10,<3.0",
+  "pwdlib[argon2]>=0.3,<1.0",
+  "PyJWT>=2.10,<3.0",
+  "sqlalchemy==2.0.52",
+]
+
+[project.optional-dependencies]
+beam-ai = [
+  "torch==2.10.0",
+  "transformers==4.52.3",
+]
+dev = [
+  "httpx>=0.28,<1.0",
+  "httpx2==2.12.0",
+  "pytest>=8.4,<9.0",
+  "pytest-cov>=6.2,<7.0",
+  "ruff>=0.12,<1.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

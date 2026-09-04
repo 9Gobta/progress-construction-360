@@ -1,0 +1,326 @@
+.page {
+  min-height: 100vh;
+  padding: 28px;
+  background: #eef3f1;
+  color: #10231d;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1560px;
+  margin: 0 auto 20px;
+}
+
+.header h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(26px, 3vw, 42px);
+}
+
+.header p {
+  max-width: 900px;
+  margin: 0;
+  color: #4d625b;
+}
+
+.eyebrow {
+  color: #087a5c !important;
+  font-weight: 800;
+  letter-spacing: .04em;
+}
+
+.back {
+  flex: none;
+  padding: 10px 16px;
+  border: 1px solid #b8c8c2;
+  border-radius: 10px;
+  background: white;
+  color: #0a5f49;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 8px;
+  max-width: 1560px;
+  margin: 0 auto 12px;
+}
+
+.tab,
+.activeTab {
+  min-height: 68px;
+  padding: 10px 12px;
+  border: 1px solid #c9d5d1;
+  border-radius: 10px;
+  background: white;
+  color: #31463f;
+  text-align: left;
+  cursor: pointer;
+}
+
+.activeTab {
+  border-color: #087a5c;
+  background: #0b604b;
+  color: white;
+  box-shadow: 0 8px 20px rgb(4 67 50 / 18%);
+}
+
+.tab span,
+.activeTab span {
+  display: block;
+  font-weight: 800;
+}
+
+.tab small,
+.activeTab small {
+  display: block;
+  margin-top: 5px;
+  opacity: .72;
+}
+
+.viewer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+  max-width: 1560px;
+  margin: 0 auto;
+}
+
+.canvas,
+.summary,
+.notes {
+  overflow: hidden;
+  border: 1px solid #cdd8d4;
+  border-radius: 14px;
+  background: white;
+}
+
+.canvas img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.cadPicker {
+  background: #f4f7f6;
+}
+
+.cadControls {
+  display: grid;
+  grid-template-columns: 120px minmax(260px, 1fr) minmax(240px, auto);
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid #cdd8d4;
+  background: white;
+}
+
+.cadControls label {
+  display: grid;
+  gap: 5px;
+  color: #52665f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cadControls select {
+  min-width: 0;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid #b9c8c3;
+  border-radius: 9px;
+  background: white;
+  color: #10231d;
+  font: inherit;
+}
+
+.cadSelectionSummary {
+  display: grid;
+  align-self: stretch;
+  align-content: center;
+  gap: 3px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: #e1f4ec;
+  color: #075b45;
+}
+
+.cadSelectionSummary span {
+  font-size: 12px;
+}
+
+.cadInteractivePlan {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2482 / 1755;
+  background: white;
+}
+
+.cadInteractivePlan img {
+  object-fit: contain;
+}
+
+.cadInteractivePlan svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.cadHitTarget {
+  stroke: transparent;
+  stroke-width: .016;
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.cadSelectedHalo,
+.cadSelectedBeam,
+.cadReviewBeam {
+  fill: none;
+  pointer-events: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.cadSelectedHalo {
+  stroke: white;
+  stroke-width: 13px;
+}
+
+.cadSelectedBeam {
+  stroke: #00a77d;
+  stroke-width: 7px;
+  stroke-linecap: round;
+}
+
+.cadReviewBeam {
+  stroke: #e78100;
+  stroke-width: 7px;
+  stroke-linecap: round;
+}
+
+.cadEndpoint {
+  fill: #007e60;
+  stroke: white;
+  stroke-width: .002;
+  pointer-events: none;
+}
+
+.summary {
+  padding: 20px;
+}
+
+.summary h2 {
+  margin: 12px 0 6px;
+}
+
+.summary p {
+  color: #536860;
+  line-height: 1.55;
+}
+
+.status {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e3f4ed;
+  color: #087a5c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.summary dl {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.summary dl div {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e9e6;
+}
+
+.summary dt {
+  color: #60736c;
+}
+
+.summary dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.warning {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff1cf;
+  color: #76510a !important;
+}
+
+.notes {
+  max-width: 1560px;
+  margin: 14px auto 0;
+  padding: 18px 22px;
+}
+
+.notes h2 {
+  margin: 0 0 8px;
+}
+
+.notes ul {
+  margin: 0;
+  padding-left: 22px;
+  color: #4d625b;
+  line-height: 1.65;
+}
+
+@media (max-width: 1100px) {
+  .tabs {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .viewer {
+    grid-template-columns: 1fr;
+  }
+
+  .cadControls {
+    grid-template-columns: 110px 1fr;
+  }
+
+  .cadSelectionSummary {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  .header {
+    display: block;
+  }
+
+  .back {
+    display: inline-block;
+    margin-top: 14px;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cadControls {
+    grid-template-columns: 1fr;
+  }
+
+  .cadSelectionSummary {
+    grid-column: auto;
+  }
+}
