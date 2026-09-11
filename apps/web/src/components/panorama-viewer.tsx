@@ -415,7 +415,13 @@ export function PanoramaViewer({
   const verifiedPoseCount = floorFrames.filter((frame) => frame.pose && !frame.pose.needs_review).length;
   const alignmentVerified = floorFrames.length >= 2 && verifiedPoseCount === floorFrames.length;
   const humanReviewedPoseCount = floorFrames.filter((frame) => Boolean(frame.pose?.reviewed_at)).length;
-  const humanAlignmentVerified = floorFrames.length >= 2 && humanReviewedPoseCount === floorFrames.length;
+  // A historic review timestamp remains useful audit evidence, but it cannot
+  // override a later quality hold.  This matters when a route is re-opened
+  // after a visual/localisation audit: the old reviewer is preserved while the
+  // viewer correctly asks for a fresh route check.
+  const humanAlignmentVerified = floorFrames.length >= 2
+    && humanReviewedPoseCount === floorFrames.length
+    && verifiedPoseCount === floorFrames.length;
   const routeAlgorithms = [
     ...floorFrames.map((frame) => frame.pose?.algorithm ?? ""),
     ...floorPathPoints.map((point) => point.algorithm ?? ""),
@@ -427,6 +433,9 @@ export function PanoramaViewer({
   });
   const usesRepeatedRouteDraft = routeAlgorithms.some((algorithm) => (
     algorithm.includes("previous-route-shape")
+  ));
+  const usesDerivedPlanRoute = routeAlgorithms.some((algorithm) => (
+    algorithm.includes("plan-route-constrained-v1")
   ));
   const persistentMapMatch = (() => {
     for (const frame of floorFrames) {
@@ -1761,7 +1770,8 @@ export function PanoramaViewer({
             })}
           </div>
           {hasUnalignedPlanRoute && !aligning ? <div className="alignment-warning">{usesRepeatedRouteDraft ? "เส้นสีส้มเป็นฉบับรอตรวจที่เทียบรูปทรงกับวันก่อนหน้า ไม่ใช่ตำแหน่งกล้องจริงที่ยืนยันแล้ว" : `${usesRigTrajectory ? "ระบบ 360 rig" : "Stella VSLAM"} คำนวณได้เพียงเส้นทางสัมพัทธ์`} จุดเริ่มต้นเพียงจุดเดียวไม่สามารถระบุทิศ หมุน และสเกลบนแปลนได้ครบ กรุณากด “กำหนดตำแหน่งจริง 3–5 จุด” และระบุตำแหน่งช่วงต้น–กลาง–ปลายก่อนนำไปตรวจ Progress</div> : isHoldout ? <div className="holdout-warning">ชุดทดสอบถูกล็อกไว้ ระบบจะแสดงผลเดิมและอนุญาตเฉพาะการบันทึก Ground Truth เพื่อวัด Accuracy</div> : posedFrames.length > 0 && !alignmentVerified && <div className="alignment-warning">เส้นสีส้มคือเส้นทางสัมพัทธ์จาก {usesRigTrajectory ? "360 rig" : "Stella VSLAM"} ซึ่งยังต้องจับตำแหน่งกับแปลนก่อนใช้อ้างอิง</div>}
-          {detail.evaluation_summary && <div className={`evaluation-summary ${detail.evaluation_summary.is_ready ? "is-ready" : ""}`}><strong>{isHoldout ? "Localization Accuracy" : "ความสอดคล้องกับจุดอ้างอิงบนแปลน"} {Number(detail.evaluation_summary.accuracy_percent).toFixed(1)}%</strong><span>{detail.evaluation_summary.within_tolerance_count}/{detail.evaluation_summary.point_count} จุดคลาดเคลื่อนไม่เกิน 3% ของแปลน · {isHoldout ? (detail.evaluation_summary.is_ready ? "พร้อมใช้รายงานผล" : `ต้องมีอย่างน้อย ${detail.evaluation_summary.required_point_count} จุด`) : "ใช้จัดแนวการเดิน ไม่ใช่ค่าพิกัดจากงานสำรวจ"}</span></div>}
+          {detail.evaluation_summary && alignmentVerified && !usesDerivedPlanRoute && <div className={`evaluation-summary ${detail.evaluation_summary.is_ready ? "is-ready" : ""}`}><strong>{isHoldout ? "Localization Accuracy" : "ความสอดคล้องกับจุดอ้างอิงบนแปลน"} {Number(detail.evaluation_summary.accuracy_percent).toFixed(1)}%</strong><span>{detail.evaluation_summary.within_tolerance_count}/{detail.evaluation_summary.point_count} จุดคลาดเคลื่อนไม่เกิน 3% ของแปลน · {isHoldout ? (detail.evaluation_summary.is_ready ? "พร้อมใช้รายงานผล" : `ต้องมีอย่างน้อย ${detail.evaluation_summary.required_point_count} จุด`) : "ใช้จัดแนวการเดิน ไม่ใช่ค่าพิกัดจากงานสำรวจ"}</span></div>}
+          {usesDerivedPlanRoute && !alignmentVerified && <div className="alignment-warning">เส้นทางนี้เคยจัดแนวจากจุดอ้างอิงบนแปลน จึงไม่แสดง 100% เป็นความแม่นยำจริงจนกว่าผู้ตรวจจะตรวจตำแหน่งต้น–กลาง–ปลายและบันทึกใหม่</div>}
           {aligning && <div className="rigid-transform-controls">
             <label><span>Scale X <strong>{draftScaleX.toFixed(4)}</strong></span><input aria-label="Scale X เส้นทาง Stella" max={scaleXMax} min={scaleXMin} onChange={(event) => setDraftScaleX(Number(event.target.value))} step={(scaleXMax - scaleXMin) / 1000} type="range" value={draftScaleX} /></label>
             <label><span>Scale Y <strong>{draftScaleY.toFixed(4)}</strong></span><input aria-label="Scale Y เส้นทาง Stella" max={scaleYMax} min={scaleYMin} onChange={(event) => setDraftScaleY(Number(event.target.value))} step={(scaleYMax - scaleYMin) / 1000} type="range" value={draftScaleY} /></label>
