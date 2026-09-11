@@ -12,9 +12,6 @@ export function AppHeader({ user, viewerTitle }: { user: User | null; viewerTitl
         </Link>
         {viewerTitle ? <strong className="viewer-header-title">{viewerTitle}</strong> : <nav className="header-nav" aria-label="เมนูหลัก">
           <Link href="/projects">โครงการ</Link>
-          <span>Capture</span>
-          <span>ตรวจ Progress</span>
-          <span>Dashboard</span>
         </nav>}
         <div className="header-account">
           {user ? (

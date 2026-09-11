@@ -11,11 +11,14 @@ import type {
   Capture,
   CaptureDetail,
   Floor,
+  FieldNote,
   HumanProgressEntry,
   Project,
   ProjectMember,
+  ProgressComparison,
   ScheduleVersion,
   SlabProgress,
+  StairProgress,
   StorageStatus,
   StructuralElement,
   TokenResponse,
@@ -103,13 +106,32 @@ export async function getProject(projectId: string): Promise<Project> {
 export async function getBimModels(projectId: string): Promise<BimModelList> {
   const token = await getSessionToken();
   if (!token) return { active: null, versions: [] };
-  return apiRequest<BimModelList>(`/projects/${projectId}/bim-models`, { token });
+  const models = await apiRequest<BimModelList>(`/projects/${projectId}/bim-models`, { token });
+  return proxyBimModelDownloads(projectId, models);
+}
+
+export function proxyBimModelDownloads(projectId: string, models: BimModelList): BimModelList {
+  const rewrite = (model: BimModelList["versions"][number]) => ({
+    ...model,
+    download_url: `/api/projects/${encodeURIComponent(projectId)}/bim-models/${encodeURIComponent(model.id)}/file`,
+  });
+  const versions = models.versions.map(rewrite);
+  const active = models.active
+    ? versions.find((model) => model.id === models.active?.id) ?? rewrite(models.active)
+    : null;
+  return { active, versions };
 }
 
 export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
   const token = await getSessionToken();
   if (!token) return [];
   return apiRequest<ProjectMember[]>(`/projects/${projectId}/members`, { token });
+}
+
+export async function getFieldNotes(projectId: string, query = ""): Promise<FieldNote[]> {
+  const token = await getSessionToken();
+  if (!token) return [];
+  return apiRequest<FieldNote[]>(`/projects/${projectId}/field-notes${query ? `?${query}` : ""}`, { token });
 }
 
 export async function getSchedules(projectId: string): Promise<ScheduleVersion[]> {
@@ -128,6 +150,18 @@ export async function getHumanProgress(projectId: string): Promise<HumanProgress
   const token = await getSessionToken();
   if (!token) return [];
   return apiRequest<HumanProgressEntry[]>(`/projects/${projectId}/progress/manual`, { token });
+}
+
+export async function getProgressComparison(
+  projectId: string,
+  captureId: string,
+): Promise<ProgressComparison> {
+  const token = await getSessionToken();
+  if (!token) throw new ApiError(401, "กรุณาเข้าสู่ระบบ");
+  return apiRequest<ProgressComparison>(
+    `/projects/${projectId}/progress/comparison?capture_id=${encodeURIComponent(captureId)}`,
+    { token },
+  );
 }
 
 export async function getFloors(projectId: string): Promise<Floor[]> {
@@ -183,6 +217,32 @@ export async function getSlabProgress(
   if (!token) throw new ApiError(401, "กรุณาเข้าสู่ระบบ");
   return apiRequest<SlabProgress>(
     `/projects/${projectId}/captures/${captureId}/slab-progress?floor_id=${encodeURIComponent(floorId)}`,
+    { token },
+  );
+}
+
+export async function getStairProgress(
+  projectId: string,
+  captureId: string,
+  floorId: string,
+): Promise<StairProgress> {
+  const token = await getSessionToken();
+  if (!token) throw new ApiError(401, "กรุณาเข้าสู่ระบบ");
+  return apiRequest<StairProgress>(
+    `/projects/${projectId}/captures/${captureId}/stair-progress?floor_id=${encodeURIComponent(floorId)}`,
+    { token },
+  );
+}
+
+export async function getRoofProgress(
+  projectId: string,
+  captureId: string,
+  floorId: string,
+): Promise<import("@/lib/types").RoofProgress> {
+  const token = await getSessionToken();
+  if (!token) throw new ApiError(401, "กรุณาเข้าสู่ระบบ");
+  return apiRequest<import("@/lib/types").RoofProgress>(
+    `/projects/${projectId}/captures/${captureId}/roof-progress?floor_id=${encodeURIComponent(floorId)}`,
     { token },
   );
 }

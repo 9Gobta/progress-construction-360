@@ -62,6 +62,84 @@ def test_projects_are_isolated_by_membership(
     assert hidden.status_code == 404
 
 
+def test_admin_can_set_structural_tracking_end_date(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    project = client.post(
+        "/api/v1/projects",
+        headers=auth_headers,
+        json={"name": "Structural scope", "timezone": "Asia/Bangkok"},
+    ).json()
+
+    updated = client.patch(
+        f"/api/v1/projects/{project['id']}/scope",
+        headers=auth_headers,
+        json={"structural_tracking_end_date": "2026-07-03"},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["structural_tracking_end_date"] == "2026-07-03"
+    fetched = client.get(
+        f"/api/v1/projects/{project['id']}", headers=auth_headers
+    )
+    assert fetched.json()["structural_tracking_end_date"] == "2026-07-03"
+
+
+def test_only_admin_can_delete_project_and_cleanup_its_objects(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    from progress_api.api.routes import projects as project_routes
+
+    project = client.post(
+        "/api/v1/projects",
+        headers=auth_headers,
+        json={"name": "Temporary demo", "timezone": "Asia/Bangkok"},
+    ).json()
+    other_project = client.post(
+        "/api/v1/projects",
+        headers=auth_headers,
+        json={"name": "Keep this project", "timezone": "Asia/Bangkok"},
+    ).json()
+    reviewer = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "delete-reviewer@example.com",
+            "display_name": "Delete Reviewer",
+            "password": "reviewer-password-123",
+        },
+    )
+    reviewer_headers = {"Authorization": f"Bearer {reviewer.json()['access_token']}"}
+    client.post(
+        f"/api/v1/projects/{project['id']}/members",
+        headers=auth_headers,
+        json={"email": "delete-reviewer@example.com", "role": "reviewer"},
+    )
+    cleanup_prefixes: list[str] = []
+    monkeypatch.setattr(
+        project_routes,
+        "delete_objects_with_prefix",
+        lambda *, prefix: cleanup_prefixes.append(prefix),
+    )
+
+    forbidden = client.delete(
+        f"/api/v1/projects/{project['id']}",
+        headers=reviewer_headers,
+    )
+    assert forbidden.status_code == 404
+
+    deleted = client.delete(
+        f"/api/v1/projects/{project['id']}",
+        headers=auth_headers,
+    )
+    assert deleted.status_code == 204
+    assert cleanup_prefixes == [f"projects/{project['id']}/"]
+
+    remaining = client.get("/api/v1/projects", headers=auth_headers)
+    assert [item["id"] for item in remaining.json()] == [other_project["id"]]
+
+
 def test_admin_can_add_reviewer_to_project(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:

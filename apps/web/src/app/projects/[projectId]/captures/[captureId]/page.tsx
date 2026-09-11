@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { AppHeader } from "@/components/app-header";
 import { CaptureReviewWorkspace } from "@/components/capture-review-workspace";
@@ -7,7 +7,7 @@ import { StitchedVideoUploader } from "@/components/stitched-video-uploader";
 import { ViewerIconRail } from "@/components/viewer-icon-rail";
 import { ViewerCaptureNavigator } from "@/components/viewer-capture-navigator";
 import type { ProcessingJob } from "@/lib/types";
-import { getActivities, getBeamProgress, getBimModels, getCaptureDetail, getCaptures, getColumnProgress, getCurrentUser, getFloors, getHumanProgress, getProject, getSchedules, getSlabProgress, getStructuralElements } from "@/lib/server-api";
+import { ApiError, getActivities, getBeamProgress, getBimModels, getCaptureDetail, getCaptures, getColumnProgress, getCurrentUser, getFieldNotes, getFloors, getHumanProgress, getProject, getProjectMembers, getRoofProgress, getSchedules, getSlabProgress, getStairProgress, getStructuralElements } from "@/lib/server-api";
 
 function EmptyCaptureState({ captureStatus, job, projectId, captureId, canUpload }: {
   captureStatus: string;
@@ -59,18 +59,30 @@ function EmptyCaptureState({ captureStatus, job, projectId, captureId, canUpload
   );
 }
 
-export default async function CaptureViewerPage({ params, searchParams }: { params: Promise<{ projectId: string; captureId: string }>; searchParams: Promise<{ panel?: string; keyframe?: string; mode?: string; floorId?: string }> }) {
+export default async function CaptureViewerPage({ params, searchParams }: { params: Promise<{ projectId: string; captureId: string }>; searchParams: Promise<{ panel?: string; keyframe?: string; mode?: string; floorId?: string; bimVersion?: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const { projectId, captureId } = await params;
-  const { panel, keyframe, mode, floorId } = await searchParams;
-  const [project, detail, floors, bimModels, captures] = await Promise.all([
-    getProject(projectId),
-    getCaptureDetail(projectId, captureId),
-    getFloors(projectId),
-    getBimModels(projectId).catch(() => ({ active: null, versions: [] })),
-    getCaptures(projectId),
-  ]);
+  const { panel, keyframe, mode, floorId, bimVersion } = await searchParams;
+  if (panel === "progress") {
+    const next = new URLSearchParams({ mode: "track" });
+    if (keyframe) next.set("keyframe", keyframe);
+    if (floorId) next.set("floorId", floorId);
+    if (bimVersion) next.set("bimVersion", bimVersion);
+    redirect(`/projects/${projectId}/captures/${captureId}?${next.toString()}`);
+  }
+  const [project, detail, floors, bimModels, captures, fieldNotes, members] = await Promise.all([
+      getProject(projectId),
+      getCaptureDetail(projectId, captureId),
+      getFloors(projectId),
+      getBimModels(projectId).catch(() => ({ active: null, versions: [] })),
+      getCaptures(projectId),
+      getFieldNotes(projectId, `capture_id=${encodeURIComponent(captureId)}`).catch(() => []),
+      getProjectMembers(projectId).catch(() => []),
+    ]).catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 404) notFound();
+      throw error;
+    });
   const job = detail.jobs[0];
   const capturedAt = new Date(detail.capture.captured_at).toLocaleString("th-TH");
   const captureDate = detail.capture.captured_at.slice(0, 10);
@@ -99,9 +111,19 @@ export default async function CaptureViewerPage({ params, searchParams }: { para
   const slabProgress = activeFloorId
     ? await getSlabProgress(projectId, captureId, activeFloorId).catch(() => null)
     : null;
+  const stairProgress = activeFloorId
+    ? await getStairProgress(projectId, captureId, activeFloorId).catch(() => null)
+    : null;
+  const roofProgress = activeFloorId
+    ? await getRoofProgress(projectId, captureId, activeFloorId).catch(() => null)
+    : null;
   const structuralElements = activeFloorId
     ? await getStructuralElements(projectId, activeFloorId).catch(() => [])
     : [];
+  const requestedBimVersion = Number(bimVersion);
+  const selectedBimModel = Number.isInteger(requestedBimVersion)
+    ? bimModels.versions.find((item) => item.version_no === requestedBimVersion) ?? bimModels.active
+    : bimModels.active;
 
   return (
     <div className="app-frame">
@@ -124,7 +146,7 @@ export default async function CaptureViewerPage({ params, searchParams }: { para
             )}
             <JobStatus captureId={captureId} captureStatus={detail.capture.status} job={job} projectId={projectId} />
           </div>
-          <ViewerCaptureNavigator activePlanFloorId={activeFloorId} captures={captures} currentCaptureId={captureId} floors={floors} progressOpen={panel === "progress"} projectId={projectId} />
+          <ViewerCaptureNavigator activePlanFloorId={activeFloorId} captures={captures} currentCaptureId={captureId} floors={floors} projectId={projectId} trackMode={mode === "track"} />
           {hasEvidence ? (
             <CaptureReviewWorkspace
               canEdit={canUpload}
@@ -132,20 +154,23 @@ export default async function CaptureViewerPage({ params, searchParams }: { para
               canManageBim={project.role === "admin"}
               canEditProgress={canEditProgress}
               canEditProgressQuantities={project.role === "admin" || project.role === "sub_admin"}
-              bimModel={bimModels.active}
+              bimModel={selectedBimModel}
               captureId={captureId}
               detail={detail}
               floors={availableFloors}
+              fieldNotes={fieldNotes}
+              members={members}
               humanProgress={humanProgress}
               beamProgress={beamProgress}
               columnProgress={columnProgress}
               slabProgress={slabProgress}
+              stairProgress={stairProgress}
+              roofProgress={roofProgress}
               structuralElements={structuralElements}
               initialKeyframeId={detail.keyframes.some((item) => item.id === keyframe) ? keyframe : null}
               initialFloorId={availableFloors.some((item) => item.id === floorId) ? floorId : detail.capture.start_floor_id}
               initialViewMode={mode === "track" ? "track" : undefined}
-              initialProgressOpen={panel === "progress"}
-              key={`${captureId}:${activeFloorId ?? "no-floor"}:${detail.capture.status}:${job?.id ?? "no-job"}:${job?.status ?? "no-status"}:${panel ?? "viewer"}`}
+              key={`${captureId}:${activeFloorId ?? "no-floor"}:${selectedBimModel?.id ?? "no-bim"}:${detail.capture.status}:${job?.id ?? "no-job"}:${job?.status ?? "no-status"}:${mode ?? "viewer"}`}
               projectId={projectId}
             />
           ) : (

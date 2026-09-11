@@ -10,6 +10,7 @@ from progress_api.services.video_pipeline import (
     _extract_tour_panoramas,
     build_spatial_visibility_targets,
     classify_keyframe_quality,
+    remove_consecutive_duplicate_warp_points,
     select_spatial_warp_points,
     select_warp_points,
 )
@@ -49,7 +50,13 @@ def test_warp_point_selection_keeps_best_frame_in_each_window() -> None:
     quality[first_best] = ("USABLE", 30.0)
     quality[second_best] = ("USABLE", 80.0)
 
-    assert select_warp_points(quality) == {first_best, second_best}
+    assert select_warp_points(quality) == {0, first_best, second_best, len(quality) - 1}
+
+
+def test_warp_point_selection_keeps_true_start_and_end_for_single_window() -> None:
+    quality = [("BLURRY", 1.0), ("USABLE", 10.0)]
+
+    assert select_warp_points(quality) == {0, 1}
 
 
 def test_spatial_warp_points_are_distributed_by_travelled_distance() -> None:
@@ -72,18 +79,63 @@ def test_spatial_warp_points_do_not_stack_during_stationary_video() -> None:
     assert select_spatial_warp_points(samples) == {0, 16}
 
 
-def test_spatial_visibility_targets_use_only_real_stations_and_cap_at_twenty() -> None:
+def test_dense_warp_points_remove_only_consecutive_duplicate_places() -> None:
+    samples = [
+        TourStationSample(index, index * 1000, "USABLE", x, y, 0)
+        for index, (x, y) in enumerate([
+            (0, 0),
+            (0, 0),
+            (1, 0),
+            (1, 0),
+            (0, 0),
+            (0, 0),
+        ])
+    ]
+
+    assert remove_consecutive_duplicate_warp_points(
+        samples,
+        {0, 1, 2, 3, 4, 5},
+    ) == {0, 2, 4, 5}
+
+
+def test_spatial_warp_points_fill_long_temporal_gaps_while_camera_moves() -> None:
+    samples = [
+        TourStationSample(
+            index,
+            index * 500,
+            "USABLE",
+            index * 0.001 if index < 40 else float(index - 39),
+            0.0,
+            0.0,
+        )
+        for index in range(81)
+    ]
+
+    selected = select_spatial_warp_points(samples)
+    selected_times = sorted(samples[index].timestamp_ms for index in selected)
+
+    assert max(
+        right - left
+        for left, right in zip(selected_times, selected_times[1:], strict=False)
+    ) <= 6000
+
+
+def test_spatial_visibility_targets_use_nearest_real_stations_and_cap_at_twenty() -> None:
     samples = [
         TourStationSample(index, index * 500, "USABLE", float(index), 0.0, 0.0)
         for index in range(25)
     ]
-    stations = set(range(0, 25, 1))
+    stations = set(range(25))
 
     graph = build_spatial_visibility_targets(samples, stations)
 
     assert len(graph[0]) == 20
     assert graph[0] == list(range(1, 21))
-    assert all(target in stations and target != source for source, targets in graph.items() for target in targets)
+    assert all(
+        target in stations and target != source
+        for source, targets in graph.items()
+        for target in targets
+    )
 
 
 def test_tour_panorama_extraction_decodes_selected_frames_in_one_pass(

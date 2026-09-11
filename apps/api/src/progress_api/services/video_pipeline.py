@@ -29,10 +29,12 @@ from progress_api.services.temporary_workspace import temporary_workspace
 from progress_api.worker import celery_app
 
 CAPTURE_FRAME_FPS = 2
-# Time-window selection remains as a fallback before localization. Once poses
-# exist, every localized frame becomes a Virtual Tour station.
+# Keep the normal one-second station cadence after localization. Only adjacent
+# candidates at exactly the same mapped position are collapsed; dense
+# keyframes remain available for review.
 WARP_POINT_INTERVAL_SECONDS = 1
 SPATIAL_STATION_INTERVAL_SECONDS = 4
+SPATIAL_STATION_MAX_GAP_SECONDS = 6
 SPATIAL_VISIBLE_PORTAL_LIMIT = 20
 PROXY_WIDTH = 1920
 PROXY_HEIGHT = 960
@@ -64,6 +66,8 @@ def classify_keyframe_quality(path: Path) -> str:
 
 def select_warp_points(quality: list[tuple[str, float]]) -> set[int]:
     """Pick one clear still per window while retaining every still for navigation."""
+    if not quality:
+        return set()
     window_size = CAPTURE_FRAME_FPS * WARP_POINT_INTERVAL_SECONDS
     status_rank = {"REJECTED": 0, "BLURRY": 1, "USABLE": 2}
     selected: set[int] = set()
@@ -73,6 +77,10 @@ def select_warp_points(quality: list[tuple[str, float]]) -> set[int]:
             range(start, stop),
             key=lambda index: (status_rank[quality[index][0]], quality[index][1]),
         ))
+    # The tour must always open at the actual beginning and retain its final
+    # position. Quality-based selection may otherwise start half a second late
+    # or omit the endpoint when a neighbouring still is sharper.
+    selected.update({0, len(quality) - 1})
     return selected
 
 
@@ -84,6 +92,30 @@ class TourStationSample:
     x: float | None
     y: float | None
     heading_deg: float | None
+
+
+def remove_consecutive_duplicate_warp_points(
+    samples: list[TourStationSample],
+    candidates: set[int],
+) -> set[int]:
+    """Keep the dense cadence while removing only identical adjacent places."""
+    selected: set[int] = set()
+    candidate_samples = [sample for sample in samples if sample.frame_index in candidates]
+    last_position: tuple[float, float] | None = None
+    for sample in candidate_samples:
+        if sample.x is None or sample.y is None:
+            selected.add(sample.frame_index)
+            last_position = None
+            continue
+        position = (float(sample.x), float(sample.y))
+        if last_position is None or position != last_position:
+            selected.add(sample.frame_index)
+            last_position = position
+    # The last frame can show the final site state even if the operator stopped
+    # at the same physical point, so always retain it.
+    if candidate_samples:
+        selected.add(candidate_samples[-1].frame_index)
+    return selected
 
 
 def select_spatial_warp_points(samples: list[TourStationSample]) -> set[int]:
@@ -125,6 +157,42 @@ def select_spatial_warp_points(samples: list[TourStationSample]) -> set[int]:
         selected.add(sample.frame_index)
         travelled %= spacing
     selected.add(localized[-1].frame_index)
+
+    # Arc-length sampling can leave a long time gap when the camera moves
+    # slowly before a faster section. Keep its spatial distribution, but add
+    # real localized frames inside moving gaps so the user never loses a long
+    # navigable part of the recording. Exact stationary spans stay sparse.
+    sample_by_index = {sample.frame_index: sample for sample in localized}
+    selected_by_time = sorted(selected, key=lambda index: sample_by_index[index].timestamp_ms)
+    max_gap_ms = SPATIAL_STATION_MAX_GAP_SECONDS * 1000
+    target_interval_ms = SPATIAL_STATION_INTERVAL_SECONDS * 1000
+    for left_index, right_index in zip(selected_by_time, selected_by_time[1:], strict=False):
+        left = sample_by_index[left_index]
+        right = sample_by_index[right_index]
+        if right.timestamp_ms - left.timestamp_ms <= max_gap_ms:
+            continue
+
+        between = [
+            sample
+            for sample in localized
+            if left.timestamp_ms <= sample.timestamp_ms <= right.timestamp_ms
+        ]
+        movement = sum(
+            math.hypot(float(b.x) - float(a.x), float(b.y) - float(a.y))
+            for a, b in zip(between, between[1:], strict=False)
+        )
+        if movement <= 1e-8:
+            continue
+
+        target_ms = left.timestamp_ms + target_interval_ms
+        while right.timestamp_ms - target_ms > 0:
+            candidate = min(
+                between,
+                key=lambda sample: abs(sample.timestamp_ms - target_ms),
+            )
+            if candidate.frame_index not in {left_index, right_index}:
+                selected.add(candidate.frame_index)
+            target_ms += target_interval_ms
     return selected
 
 
@@ -134,12 +202,12 @@ def build_spatial_visibility_targets(
     *,
     limit: int = SPATIAL_VISIBLE_PORTAL_LIMIT,
 ) -> dict[int, list[int]]:
-    """Build a dense, stable portal graph from this capture's own SfM track.
+    """Build the reference-style portal graph from this capture's own track.
 
-    A sparse point cloud does not provide the watertight triangle mesh needed
-    for exact ray occlusion. In that case the closest spatial stations are the
-    safest deterministic approximation. The 20-target cap mirrors the approved
-    20/12 reference without copying any of its coordinates or links.
+    The approved 20/12 tour exposes several spatially nearby destinations from
+    each panorama instead of only the previous/next station.  Use the current
+    capture's reconstructed coordinates (never reference coordinates) and cap
+    the candidates at the same twenty-portal density as that reference.
     """
     stations = [
         sample
@@ -425,7 +493,11 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
                         else None
                     ),
                 ))
-            warp_point_indices = select_spatial_warp_points(spatial_samples)
+            dense_candidates = select_warp_points(quality)
+            warp_point_indices = remove_consecutive_duplicate_warp_points(
+                spatial_samples,
+                dense_candidates,
+            )
             if len(warp_point_indices) < 2:
                 warp_point_indices = select_warp_points(quality)
             for keyframe in keyframes:

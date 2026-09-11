@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from progress_api.access import require_project_role
 from progress_api.dependencies import CurrentUser, DbSession
@@ -37,14 +37,22 @@ from progress_api.schemas.progress import (
     ColumnProgressItem,
     ColumnProgressRead,
     ColumnStageSummary,
+    HumanProgressBulkCreate,
     HumanProgressCreate,
     HumanProgressRead,
     ProgressComparisonItem,
     ProgressComparisonRead,
+    RoofProgressBulkCreate,
+    RoofProgressBulkDelete,
+    RoofProgressItem,
+    RoofProgressRead,
     SlabProgressBulkCreate,
     SlabProgressItem,
     SlabProgressRead,
     SlabStageSummary,
+    StairProgressBulkCreate,
+    StairProgressItem,
+    StairProgressRead,
     WorkProgressAIRequest,
     WorkProgressBulkCreate,
     WorkProgressItem,
@@ -63,9 +71,25 @@ from progress_api.services.work_progress_ai import (
 
 router = APIRouter()
 
-BEAM_STAGES = ("SETTING_OUT", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
+FLOOR_ONE_BEAM_STAGES = ("SETTING_OUT", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
+UPPER_FLOOR_BEAM_STAGES = ("SHORING", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
 COLUMN_STAGES = ("REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
-SLAB_STAGES = ("STEP_1", "STEP_2", "STEP_3", "STEP_4", "STEP_5")
+FLOOR_ONE_STAIR_STAGES = ("REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
+UPPER_FLOOR_STAIR_STAGES = ("SHORING", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
+LEGACY_SLAB_STAGES = ("STEP_1", "STEP_2", "STEP_3", "STEP_4", "STEP_5")
+GS_SLAB_STAGES = ("SOIL_COMPACTION", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
+FLOOR_ONE_S1_SLAB_STAGES = ("FORMWORK", "REBAR", "CONCRETE", "STRIP_FORM")
+S1_SLAB_STAGES = ("SHORING", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM")
+PC1_SLAB_STAGES = (
+    "SHORING",
+    "PLACE_PRECAST",
+    "REBAR",
+    "FORMWORK",
+    "CONCRETE",
+    "STRIP_FORM",
+)
+SLAB_STAGES = (*LEGACY_SLAB_STAGES, "SOIL_COMPACTION", *PC1_SLAB_STAGES)
+ROOF_COMPLETE_STAGE = "COMPLETE"
 COLUMN_GRID_X = (0.1998, 0.2893, 0.3791, 0.4689, 0.5586, 0.6484)
 COLUMN_GRID_Y = (0.2729, 0.4072, 0.4711, 0.6056)
 COLUMN_GRID_X_LABELS = ("1", "2", "3", "4", "5", "6")
@@ -167,10 +191,12 @@ def _work_progress_result(
 
 
 def _normalize_stage_ranges(
-    stage_ranges: dict[str, list[BeamStageRange]], segment_length: Decimal
+    stage_ranges: dict[str, list[BeamStageRange]],
+    segment_length: Decimal,
+    stages: tuple[str, ...],
 ) -> dict[str, list[dict[str, float]]]:
     normalized: dict[str, list[dict[str, float]]] = {}
-    for stage in BEAM_STAGES:
+    for stage in stages:
         raw_ranges = stage_ranges.get(stage, [])
         ordered = sorted(
             (
@@ -202,30 +228,102 @@ def _normalize_stage_ranges(
 
 
 def _entry_stage_ranges(
-    entry: BeamProgressEntry | None, segment_length: Decimal
+    entry: BeamProgressEntry | None,
+    segment_length: Decimal,
+    stages: tuple[str, ...],
 ) -> dict[str, list[BeamStageRange]]:
     if entry is None:
         return {}
     if entry.stage_ranges_json is not None:
-        return {
-            stage: [
-                BeamStageRange(
-                    start_m=Decimal(str(interval["start_m"])),
-                    end_m=Decimal(str(interval["end_m"])),
-                )
-                for interval in entry.stage_ranges_json.get(stage, [])
-            ]
-            for stage in BEAM_STAGES
-            if entry.stage_ranges_json.get(stage)
-        }
+        result: dict[str, list[BeamStageRange]] = {}
+        for stage in stages:
+            ranges: list[BeamStageRange] = []
+            for interval in entry.stage_ranges_json.get(stage, []):
+                start_m = max(Decimal(0), min(segment_length, Decimal(str(interval["start_m"]))))
+                end_m = max(Decimal(0), min(segment_length, Decimal(str(interval["end_m"]))))
+                if end_m > start_m:
+                    ranges.append(BeamStageRange(start_m=start_m, end_m=end_m))
+            if ranges:
+                result[stage] = ranges
+        return result
     statuses = entry.stage_status_json or {
         stage: entry.progress_percent >= Decimal((index + 1) * 20)
-        for index, stage in enumerate(BEAM_STAGES)
+        for index, stage in enumerate(stages)
     }
     return {
         stage: [BeamStageRange(start_m=Decimal(0), end_m=segment_length)]
-        for stage in BEAM_STAGES
+        for stage in stages
         if statuses.get(stage, False) and segment_length > 0
+    }
+
+
+def _latest_stage_snapshots_per_capture(
+    entries: list[BeamProgressEntry] | list[StructuralElementProgressEntry],
+    *,
+    element_id: uuid.UUID,
+    element_id_attribute: str,
+) -> list[BeamProgressEntry] | list[StructuralElementProgressEntry]:
+    """Keep the newest edit per capture while retaining older capture stages.
+
+    Entry queries are ordered by capture date descending and then edit time
+    descending.  A second save on the same capture is therefore a correction,
+    but a completed construction stage from an older capture must carry forward
+    instead of disappearing when another stage is inspected later.
+    """
+    snapshots: list[BeamProgressEntry] | list[StructuralElementProgressEntry] = []
+    seen_capture_ids: set[uuid.UUID] = set()
+    for entry in entries:
+        if getattr(entry, element_id_attribute) != element_id:
+            continue
+        if entry.capture_id in seen_capture_ids:
+            continue
+        seen_capture_ids.add(entry.capture_id)
+        snapshots.append(entry)
+    return snapshots
+
+
+def _cumulative_stage_statuses(
+    entries: list[StructuralElementProgressEntry],
+    *,
+    element_id: uuid.UUID,
+) -> tuple[StructuralElementProgressEntry | None, dict[str, bool]]:
+    snapshots = _latest_stage_snapshots_per_capture(
+        entries,
+        element_id=element_id,
+        element_id_attribute="structural_element_id",
+    )
+    if not snapshots:
+        return None, {}
+    statuses: dict[str, bool] = {}
+    for snapshot in snapshots:
+        for stage, complete in (snapshot.stage_status_json or {}).items():
+            if complete:
+                statuses[stage] = True
+    return snapshots[0], statuses
+
+
+def _cumulative_beam_stage_ranges(
+    entries: list[BeamProgressEntry],
+    *,
+    segment_id: uuid.UUID,
+    segment_length: Decimal,
+    stages: tuple[str, ...],
+) -> tuple[BeamProgressEntry | None, dict[str, list[BeamStageRange]]]:
+    snapshots = _latest_stage_snapshots_per_capture(
+        entries,
+        element_id=segment_id,
+        element_id_attribute="beam_segment_id",
+    )
+    if not snapshots:
+        return None, {}
+    combined: dict[str, list[BeamStageRange]] = {}
+    for snapshot in snapshots:
+        for stage, ranges in _entry_stage_ranges(snapshot, segment_length, stages).items():
+            combined.setdefault(stage, []).extend(ranges)
+    normalized = _normalize_stage_ranges(combined, segment_length, stages)
+    return snapshots[0], {
+        stage: [BeamStageRange(**interval) for interval in ranges]
+        for stage, ranges in normalized.items()
     }
 
 
@@ -264,21 +362,42 @@ def _beam_progress_result(
     segments: list[BeamSegment],
     entries: list[BeamProgressEntry],
     _predictions: list[BeamProgressPrediction],
+    stages: tuple[str, ...] = FLOOR_ONE_BEAM_STAGES,
 ) -> BeamProgressRead:
-    latest: dict[uuid.UUID, BeamProgressEntry] = {}
-    for entry in entries:
-        latest.setdefault(entry.beam_segment_id, entry)
     weighted_sum = Decimal(0)
     total_weight = Decimal(0)
-    stage_completed_lengths = {stage: Decimal(0) for stage in BEAM_STAGES}
+    stage_completed_lengths = {stage: Decimal(0) for stage in stages}
     items: list[BeamProgressItem] = []
+    labeled_count = 0
     for segment in segments:
-        entry = latest.get(segment.id)
         weight = segment.length_m or Decimal(1)
         total_weight += weight
+        entry, stage_ranges = _cumulative_beam_stage_ranges(
+            entries,
+            segment_id=segment.id,
+            segment_length=weight,
+            stages=stages,
+        )
         if entry is not None:
-            weighted_sum += entry.progress_percent * weight
-        stage_ranges = _entry_stage_ranges(entry, weight)
+            labeled_count += 1
+        completed_equivalent = sum(
+            (
+                item.end_m - item.start_m
+                for ranges in stage_ranges.values()
+                for item in ranges
+            ),
+            Decimal(0),
+        )
+        item_progress = None
+        if entry is not None:
+            item_progress = (
+                completed_equivalent / (weight * Decimal(len(stages))) * Decimal(100)
+            ).quantize(Decimal("0.001")) if (
+                weight > 0
+                and (entry.stage_ranges_json is not None or entry.stage_status_json is not None)
+            ) else entry.progress_percent
+        if item_progress is not None:
+            weighted_sum += item_progress * weight
         for stage, ranges in stage_ranges.items():
             stage_completed_lengths[stage] += sum(
                 (item.end_m - item.start_m for item in ranges), Decimal(0)
@@ -293,15 +412,14 @@ def _beam_progress_result(
                 end_x=segment.end_x,
                 end_y=segment.end_y,
                 length_m=segment.length_m,
-                progress_percent=entry.progress_percent if entry else None,
+                progress_percent=item_progress,
                 completed_stages=[
                     stage
-                    for index, stage in enumerate(BEAM_STAGES)
-                    if entry and (
-                        (entry.stage_status_json or {}).get(stage, False)
-                        if entry.stage_status_json is not None
-                        else entry.progress_percent >= Decimal((index + 1) * 20)
-                    )
+                    for stage in stages
+                    if sum(
+                        (item.end_m - item.start_m for item in stage_ranges.get(stage, [])),
+                        Decimal(0),
+                    ) >= weight - Decimal("0.001")
                 ],
                 stage_ranges=stage_ranges,
                 evidence_keyframe_id=entry.evidence_keyframe_id if entry else None,
@@ -314,7 +432,7 @@ def _beam_progress_result(
         project_id=project_id,
         capture_id=capture_id,
         floor_id=floor_id,
-        labeled_count=len(latest),
+        labeled_count=labeled_count,
         segment_count=len(segments),
         weighted_progress_percent=(weighted_sum / total_weight).quantize(Decimal("0.001"))
         if total_weight
@@ -336,6 +454,11 @@ def _beam_progress_result(
         ],
         items=items,
     )
+
+
+def _beam_stages_for_floor(db: DbSession, floor_id: uuid.UUID) -> tuple[str, ...]:
+    floor = db.get(Floor, floor_id)
+    return UPPER_FLOOR_BEAM_STAGES if floor and floor.level_index >= 2 else FLOOR_ONE_BEAM_STAGES
 
 
 def _load_beam_progress(
@@ -517,6 +640,101 @@ def _column_progress_result(
     )
 
 
+def _stair_stages_for_floor(db: DbSession, floor_id: uuid.UUID) -> tuple[str, ...]:
+    floor = db.get(Floor, floor_id)
+    return UPPER_FLOOR_STAIR_STAGES if floor and floor.level_index >= 2 else FLOOR_ONE_STAIR_STAGES
+
+
+def _load_stair_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    db: DbSession,
+) -> tuple[Capture, list[StructuralElement], list[StructuralElementProgressEntry]]:
+    capture = db.get(Capture, capture_id)
+    floor = db.get(Floor, floor_id)
+    if (
+        capture is None
+        or capture.project_id != project_id
+        or floor is None
+        or floor.project_id != project_id
+    ):
+        raise HTTPException(status_code=404, detail="ไม่พบ Capture หรือชั้นอาคาร")
+    stairs = list(db.scalars(select(StructuralElement).where(
+        StructuralElement.project_id == project_id,
+        StructuralElement.floor_id == floor_id,
+        StructuralElement.element_kind == "STAIR",
+        StructuralElement.is_active.is_(True),
+    )))
+    stairs.sort(key=lambda item: (_column_center(item)[1], _column_center(item)[0], item.code))
+    stair_ids = [item.id for item in stairs]
+    entries = list(db.scalars(
+        select(StructuralElementProgressEntry)
+        .join(Capture, StructuralElementProgressEntry.capture_id == Capture.id)
+        .where(
+            StructuralElementProgressEntry.project_id == project_id,
+            StructuralElementProgressEntry.structural_element_id.in_(stair_ids),
+            Capture.captured_at <= capture.captured_at,
+        )
+        .order_by(Capture.captured_at.desc(), StructuralElementProgressEntry.created_at.desc())
+    )) if stair_ids else []
+    return capture, stairs, entries
+
+
+def _stair_progress_result(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    stairs: list[StructuralElement],
+    entries: list[StructuralElementProgressEntry],
+    stages: tuple[str, ...],
+) -> StairProgressRead:
+    completed_counts = {stage: 0 for stage in stages}
+    items: list[StairProgressItem] = []
+    labeled_count = 0
+    for stair in stairs:
+        entry, statuses = _cumulative_stage_statuses(entries, element_id=stair.id)
+        if entry is not None:
+            labeled_count += 1
+        completed_stages = [stage for stage in stages if statuses.get(stage, False)]
+        for stage in completed_stages:
+            completed_counts[stage] += 1
+        items.append(StairProgressItem(
+            structural_element_id=stair.id,
+            code=stair.code,
+            geometry_json=stair.geometry_json,
+            progress_percent=(
+                Decimal(len(completed_stages)) / Decimal(len(stages)) * Decimal(100)
+            ).quantize(Decimal("0.001")) if entry else None,
+            completed_stages=completed_stages,
+            evidence_keyframe_id=entry.evidence_keyframe_id if entry else None,
+            note=entry.note if entry else None,
+            entered_by_id=entry.entered_by_id if entry else None,
+            created_at=entry.created_at if entry else None,
+        ))
+    denominator = len(stairs) * len(stages)
+    completed_total = sum(completed_counts.values())
+    return StairProgressRead(
+        project_id=project_id,
+        capture_id=capture_id,
+        floor_id=floor_id,
+        labeled_count=labeled_count,
+        stair_count=len(stairs),
+        progress_percent=(
+            Decimal(completed_total) / Decimal(denominator) * Decimal(100)
+        ).quantize(Decimal("0.001")) if denominator else Decimal(0),
+        stage_summaries=[ColumnStageSummary(
+            stage=stage,
+            completed_count=completed_counts[stage],
+            total_count=len(stairs),
+            progress_percent=(
+                Decimal(completed_counts[stage]) / Decimal(len(stairs)) * Decimal(100)
+            ).quantize(Decimal("0.001")) if stairs else Decimal(0),
+        ) for stage in stages],
+        items=items,
+    )
+
+
 def _slab_area_m2(element: StructuralElement) -> Decimal:
     documented_area = element.geometry_json.get("area_m2")
     if documented_area is not None:
@@ -532,6 +750,42 @@ def _slab_area_m2(element: StructuralElement) -> Decimal:
     x_scale = Decimal("18.75") / Decimal(str(COLUMN_GRID_X[-1] - COLUMN_GRID_X[0]))
     y_scale = Decimal("9.90") / Decimal(str(COLUMN_GRID_Y[-1] - COLUMN_GRID_Y[0]))
     return (normalized_area * x_scale * y_scale).quantize(Decimal("0.001"))
+
+
+def _slab_type(element: StructuralElement) -> str:
+    value = str(element.geometry_json.get("slab_type") or "LEGACY").upper()
+    return value if value in {"GS", "S1", "PC1"} else "LEGACY"
+
+
+def _slab_stage_codes(element: StructuralElement) -> tuple[str, ...]:
+    slab_type = _slab_type(element)
+    workflow = str(element.geometry_json.get("slab_workflow") or "").upper()
+    if slab_type == "GS":
+        return GS_SLAB_STAGES
+    if slab_type == "PC1":
+        return PC1_SLAB_STAGES
+    if slab_type == "S1" and workflow == "S1_FLOOR_1":
+        return FLOOR_ONE_S1_SLAB_STAGES
+    if slab_type == "S1":
+        return S1_SLAB_STAGES
+    return LEGACY_SLAB_STAGES
+
+
+def _normalized_slab_stages(
+    element: StructuralElement,
+    statuses: dict[str, object],
+) -> list[str]:
+    required = _slab_stage_codes(element)
+    if any(statuses.get(stage, False) for stage in required):
+        return [stage for stage in required if statuses.get(stage, False)]
+    # Existing records used ordinal STEP_1..STEP_5 values. Interpret those
+    # values through the reviewed type-specific workflow without rewriting the
+    # historical inspection entries.
+    return [
+        required[index]
+        for index, legacy_stage in enumerate(LEGACY_SLAB_STAGES)
+        if index < len(required) and statuses.get(legacy_stage, False)
+    ]
 
 
 def _load_slab_progress(
@@ -577,17 +831,22 @@ def _slab_progress_result(
     slabs: list[StructuralElement],
     entries: list[StructuralElementProgressEntry],
 ) -> SlabProgressRead:
-    latest: dict[uuid.UUID, StructuralElementProgressEntry] = {}
-    for entry in entries:
-        latest.setdefault(entry.structural_element_id, entry)
     total_area = sum((_slab_area_m2(item) for item in slabs), Decimal(0))
     completed_area = {stage: Decimal(0) for stage in SLAB_STAGES}
+    eligible_area = {stage: Decimal(0) for stage in SLAB_STAGES}
     items: list[SlabProgressItem] = []
+    denominator = Decimal(0)
+    labeled_count = 0
     for slab in slabs:
-        entry = latest.get(slab.id)
-        statuses = entry.stage_status_json if entry else {}
-        stages = [stage for stage in SLAB_STAGES if statuses.get(stage, False)]
+        entry, statuses = _cumulative_stage_statuses(entries, element_id=slab.id)
+        if entry is not None:
+            labeled_count += 1
+        required_stages = _slab_stage_codes(slab)
+        stages = _normalized_slab_stages(slab, statuses)
         area = _slab_area_m2(slab)
+        denominator += area * Decimal(len(required_stages))
+        for stage in required_stages:
+            eligible_area[stage] += area
         for stage in stages:
             completed_area[stage] += area
         items.append(SlabProgressItem(
@@ -595,7 +854,9 @@ def _slab_progress_result(
             code=slab.code,
             area_m2=area,
             geometry_json=slab.geometry_json,
-            progress_percent=entry.progress_percent if entry else None,
+            progress_percent=(
+                Decimal(len(stages)) / Decimal(len(required_stages)) * Decimal(100)
+            ).quantize(Decimal("0.001")) if entry else None,
             completed_stages=stages,
             evidence_keyframe_id=entry.evidence_keyframe_id if entry else None,
             note=entry.note if entry else None,
@@ -603,7 +864,6 @@ def _slab_progress_result(
             created_at=entry.created_at if entry else None,
         ))
     completed_equivalent_area = sum(completed_area.values(), Decimal(0))
-    denominator = total_area * Decimal(len(SLAB_STAGES))
     progress = (completed_equivalent_area / denominator * Decimal(100)).quantize(
         Decimal("0.001")
     ) if denominator else Decimal(0)
@@ -611,18 +871,143 @@ def _slab_progress_result(
         project_id=project_id,
         capture_id=capture_id,
         floor_id=floor_id,
-        labeled_count=len(latest),
+        labeled_count=labeled_count,
         zone_count=len(slabs),
         total_area_m2=total_area.quantize(Decimal("0.001")),
         progress_percent=progress,
         stage_summaries=[SlabStageSummary(
             stage=stage,
             completed_area_m2=completed_area[stage].quantize(Decimal("0.001")),
-            total_area_m2=total_area.quantize(Decimal("0.001")),
-            progress_percent=(completed_area[stage] / total_area * Decimal(100)).quantize(
+            total_area_m2=eligible_area[stage].quantize(Decimal("0.001")),
+            progress_percent=(completed_area[stage] / eligible_area[stage] * Decimal(100)).quantize(
                 Decimal("0.001")
-            ) if total_area else Decimal(0),
-        ) for stage in SLAB_STAGES],
+            ) if eligible_area[stage] else Decimal(0),
+        ) for stage in SLAB_STAGES if eligible_area[stage]],
+        items=items,
+    )
+
+
+def _load_roof_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    db: DbSession,
+) -> tuple[Capture, list[StructuralElement], list[StructuralElementProgressEntry]]:
+    capture = db.get(Capture, capture_id)
+    floor = db.get(Floor, floor_id)
+    if (
+        capture is None
+        or capture.project_id != project_id
+        or floor is None
+        or floor.project_id != project_id
+    ):
+        raise HTTPException(status_code=404, detail="ไม่พบ Capture หรือชั้นหลังคา")
+    roofs = list(db.scalars(select(StructuralElement).where(
+        StructuralElement.project_id == project_id,
+        StructuralElement.floor_id == floor_id,
+        StructuralElement.element_kind == "ROOF",
+        StructuralElement.is_active.is_(True),
+    )))
+    roofs.sort(key=lambda item: (
+        str(item.geometry_json.get("activity_wbs", "")),
+        _column_center(item)[1],
+        _column_center(item)[0],
+        item.code,
+    ))
+    roof_ids = [item.id for item in roofs]
+    entries = list(db.scalars(
+        select(StructuralElementProgressEntry)
+        .join(Capture, StructuralElementProgressEntry.capture_id == Capture.id)
+        .where(
+            StructuralElementProgressEntry.project_id == project_id,
+            StructuralElementProgressEntry.structural_element_id.in_(roof_ids),
+            Capture.captured_at <= capture.captured_at,
+        )
+        .order_by(Capture.captured_at.desc(), StructuralElementProgressEntry.created_at.desc())
+    )) if roof_ids else []
+    return capture, roofs, entries
+
+
+def _roof_total_quantity(roof: StructuralElement) -> int:
+    if str(roof.geometry_json.get("progress_mode", "")).upper() != "COUNT":
+        return 1
+    try:
+        return max(1, int(roof.geometry_json.get("total_quantity", 1)))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _roof_completed_quantity(
+    entry: StructuralElementProgressEntry | None,
+    total_quantity: int,
+) -> int:
+    if entry is None:
+        return 0
+    raw_quantity = entry.stage_status_json.get("completed_quantity")
+    if raw_quantity is not None and not isinstance(raw_quantity, bool):
+        try:
+            return max(0, min(total_quantity, int(raw_quantity)))
+        except (TypeError, ValueError):
+            pass
+    if (
+        entry.stage_status_json.get(ROOF_COMPLETE_STAGE, False)
+        or entry.progress_percent >= Decimal(100)
+    ):
+        return total_quantity
+    return max(0, min(
+        total_quantity,
+        int((entry.progress_percent / Decimal(100) * total_quantity).quantize(Decimal("1"))),
+    ))
+
+
+def _roof_progress_result(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    roofs: list[StructuralElement],
+    entries: list[StructuralElementProgressEntry],
+) -> RoofProgressRead:
+    latest: dict[uuid.UUID, StructuralElementProgressEntry] = {}
+    for entry in entries:
+        latest.setdefault(entry.structural_element_id, entry)
+    completed_quantity_sum = 0
+    total_quantity_sum = 0
+    items: list[RoofProgressItem] = []
+    for roof in roofs:
+        entry = latest.get(roof.id)
+        total_quantity = _roof_total_quantity(roof)
+        completed_quantity = _roof_completed_quantity(entry, total_quantity)
+        complete = completed_quantity >= total_quantity
+        completed_quantity_sum += completed_quantity
+        total_quantity_sum += total_quantity
+        count_mode = str(roof.geometry_json.get("progress_mode", "")).upper() == "COUNT"
+        items.append(RoofProgressItem(
+            structural_element_id=roof.id,
+            code=roof.code,
+            activity_wbs=str(roof.geometry_json.get("activity_wbs", "")),
+            geometry_json=roof.geometry_json,
+            progress_percent=(
+                Decimal(completed_quantity) / Decimal(total_quantity) * Decimal(100)
+            ).quantize(Decimal("0.001")) if entry else None,
+            complete=complete,
+            completed_quantity=completed_quantity if count_mode else None,
+            total_quantity=total_quantity if count_mode else None,
+            capture_id=entry.capture_id if entry else None,
+            evidence_keyframe_id=entry.evidence_keyframe_id if entry else None,
+            note=entry.note if entry else None,
+            entered_by_id=entry.entered_by_id if entry else None,
+            created_at=entry.created_at if entry else None,
+        ))
+    progress = (
+        Decimal(completed_quantity_sum) / Decimal(total_quantity_sum) * Decimal(100)
+    ).quantize(Decimal("0.001")) if total_quantity_sum else Decimal(0)
+    return RoofProgressRead(
+        project_id=project_id,
+        capture_id=capture_id,
+        floor_id=floor_id,
+        labeled_count=len(latest),
+        element_count=len(roofs),
+        progress_percent=progress,
         items=items,
     )
 
@@ -643,7 +1028,8 @@ def get_beam_progress(
         project_id, capture_id, floor_id, db
     )
     return _beam_progress_result(
-        project_id, capture_id, floor_id, segments, entries, predictions
+        project_id, capture_id, floor_id, segments, entries, predictions,
+        _beam_stages_for_floor(db, floor_id),
     )
 
 
@@ -664,6 +1050,7 @@ def save_beam_progress(
     capture, segments, _entries, _predictions = _load_beam_progress(
         project_id, capture_id, payload.floor_id, db
     )
+    beam_stages = _beam_stages_for_floor(db, payload.floor_id)
     segment_ids = {segment.id for segment in segments}
     requested_ids = [entry.beam_segment_id for entry in payload.entries]
     invalid_segments = (
@@ -703,7 +1090,11 @@ def save_beam_progress(
         if item.stage_ranges is not None:
             if segment_length <= 0:
                 raise HTTPException(status_code=422, detail="คานที่เลือกไม่มีความยาวอ้างอิง")
-            stage_ranges_json = _normalize_stage_ranges(item.stage_ranges, segment_length)
+            stage_ranges_json = _normalize_stage_ranges(
+                item.stage_ranges,
+                segment_length,
+                beam_stages,
+            )
             covered = sum(
                 (
                     Decimal(str(interval["end_m"])) - Decimal(str(interval["start_m"]))
@@ -713,7 +1104,7 @@ def save_beam_progress(
                 Decimal(0),
             )
             progress_percent = (
-                covered / (segment_length * Decimal(len(BEAM_STAGES))) * Decimal(100)
+                covered / (segment_length * Decimal(len(beam_stages))) * Decimal(100)
             ).quantize(Decimal("0.001"))
             completed_stages = [
                 stage
@@ -730,7 +1121,7 @@ def save_beam_progress(
             ]
         else:
             progress_percent = (
-                Decimal(len(completed_stages) * 20)
+                Decimal(len(completed_stages)) / Decimal(len(beam_stages)) * Decimal(100)
                 if completed_stages is not None
                 else item.progress_percent
             )
@@ -743,7 +1134,7 @@ def save_beam_progress(
                 progress_percent=progress_percent,
                 stage_status_json={
                     stage: stage in completed_stages
-                    for stage in BEAM_STAGES
+                    for stage in beam_stages
                 } if completed_stages is not None else None,
                 stage_ranges_json=stage_ranges_json,
                 note=(item.note or "").strip() or None,
@@ -755,7 +1146,8 @@ def save_beam_progress(
         project_id, capture_id, payload.floor_id, db
     )
     return _beam_progress_result(
-        project_id, capture_id, payload.floor_id, segments, entries, predictions
+        project_id, capture_id, payload.floor_id, segments, entries, predictions,
+        beam_stages,
     )
 
 
@@ -835,6 +1227,83 @@ def save_column_progress(
 
 
 @router.get(
+    "/{project_id}/captures/{capture_id}/stair-progress",
+    response_model=StairProgressRead,
+)
+def get_stair_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> StairProgressRead:
+    require_project_role(db, project_id=project_id, user_id=user.id)
+    _capture, stairs, entries = _load_stair_progress(project_id, capture_id, floor_id, db)
+    return _stair_progress_result(
+        project_id, capture_id, floor_id, stairs, entries,
+        _stair_stages_for_floor(db, floor_id),
+    )
+
+
+@router.put(
+    "/{project_id}/captures/{capture_id}/stair-progress",
+    response_model=StairProgressRead,
+)
+def save_stair_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    payload: StairProgressBulkCreate,
+    db: DbSession,
+    user: CurrentUser,
+) -> StairProgressRead:
+    require_project_role(
+        db, project_id=project_id, user_id=user.id,
+        allowed_roles={"admin", "sub_admin", "reviewer"},
+    )
+    capture, stairs, _entries = _load_stair_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    stair_ids = {stair.id for stair in stairs}
+    requested_ids = [entry.structural_element_id for entry in payload.entries]
+    if len(set(requested_ids)) != len(requested_ids) or not set(requested_ids).issubset(stair_ids):
+        raise HTTPException(status_code=422, detail="รายการบันไดไม่ถูกต้องหรือมีรหัสซ้ำ")
+    stages = _stair_stages_for_floor(db, payload.floor_id)
+    keyframe_ids = {
+        entry.evidence_keyframe_id
+        for entry in payload.entries
+        if entry.evidence_keyframe_id is not None
+    }
+    valid_keyframes = set(db.scalars(select(Keyframe.id).where(
+        Keyframe.capture_id == capture.id,
+        Keyframe.id.in_(keyframe_ids),
+    ))) if keyframe_ids else set()
+    if valid_keyframes != keyframe_ids:
+        raise HTTPException(status_code=422, detail="ภาพหลักฐานไม่ได้อยู่ใน Capture นี้")
+    for item in payload.entries:
+        if not set(item.completed_stages).issubset(stages):
+            raise HTTPException(status_code=422, detail="ขั้นงานไม่ตรงกับชั้นของบันไดที่เลือก")
+        db.add(StructuralElementProgressEntry(
+            project_id=project_id,
+            capture_id=capture_id,
+            structural_element_id=item.structural_element_id,
+            evidence_keyframe_id=item.evidence_keyframe_id,
+            progress_percent=(
+                Decimal(len(item.completed_stages)) / Decimal(len(stages)) * Decimal(100)
+            ).quantize(Decimal("0.001")),
+            stage_status_json={stage: stage in item.completed_stages for stage in stages},
+            note=(item.note or "").strip() or None,
+            entered_by_id=user.id,
+        ))
+    db.commit()
+    _capture, stairs, entries = _load_stair_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    return _stair_progress_result(
+        project_id, capture_id, payload.floor_id, stairs, entries, stages
+    )
+
+
+@router.get(
     "/{project_id}/captures/{capture_id}/slab-progress",
     response_model=SlabProgressRead,
 )
@@ -867,7 +1336,8 @@ def save_slab_progress(
     capture, slabs, _entries = _load_slab_progress(
         project_id, capture_id, payload.floor_id, db
     )
-    slab_ids = {slab.id for slab in slabs}
+    slab_by_id = {slab.id: slab for slab in slabs}
+    slab_ids = set(slab_by_id)
     requested_ids = [entry.structural_element_id for entry in payload.entries]
     if len(set(requested_ids)) != len(requested_ids) or not set(requested_ids).issubset(slab_ids):
         raise HTTPException(status_code=422, detail="รายการพื้นที่พื้นไม่ถูกต้องหรือมีรหัสซ้ำ")
@@ -883,12 +1353,22 @@ def save_slab_progress(
     if valid_keyframes != keyframe_ids:
         raise HTTPException(status_code=422, detail="ภาพหลักฐานไม่ได้อยู่ใน Capture นี้")
     for item in payload.entries:
+        required_stages = _slab_stage_codes(slab_by_id[item.structural_element_id])
+        if not set(item.completed_stages).issubset(required_stages):
+            raise HTTPException(
+                status_code=422,
+                detail="ขั้นงานไม่ตรงกับประเภทพื้น GS/S1/PC1 ที่เลือก",
+            )
         db.add(StructuralElementProgressEntry(
             project_id=project_id,
             capture_id=capture_id,
             structural_element_id=item.structural_element_id,
             evidence_keyframe_id=item.evidence_keyframe_id,
-            progress_percent=Decimal(len(item.completed_stages) * 20),
+            progress_percent=(
+                Decimal(len(item.completed_stages))
+                / Decimal(len(required_stages))
+                * Decimal(100)
+            ).quantize(Decimal("0.001")),
             stage_status_json={stage: stage in item.completed_stages for stage in SLAB_STAGES},
             note=(item.note or "").strip() or None,
             entered_by_id=user.id,
@@ -898,6 +1378,283 @@ def save_slab_progress(
         project_id, capture_id, payload.floor_id, db
     )
     return _slab_progress_result(project_id, capture_id, payload.floor_id, slabs, entries)
+
+
+@router.get(
+    "/{project_id}/captures/{capture_id}/roof-progress",
+    response_model=RoofProgressRead,
+)
+def get_roof_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> RoofProgressRead:
+    require_project_role(db, project_id=project_id, user_id=user.id)
+    _capture, roofs, entries = _load_roof_progress(
+        project_id, capture_id, floor_id, db
+    )
+    return _roof_progress_result(project_id, capture_id, floor_id, roofs, entries)
+
+
+@router.put(
+    "/{project_id}/captures/{capture_id}/roof-progress",
+    response_model=RoofProgressRead,
+)
+def save_roof_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    payload: RoofProgressBulkCreate,
+    db: DbSession,
+    user: CurrentUser,
+) -> RoofProgressRead:
+    require_project_role(
+        db, project_id=project_id, user_id=user.id, allowed_roles={"admin", "sub_admin", "reviewer"}
+    )
+    capture, roofs, previous_entries = _load_roof_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    roof_by_id = {roof.id: roof for roof in roofs}
+    requested_ids = [entry.structural_element_id for entry in payload.entries]
+    if (
+        len(set(requested_ids)) != len(requested_ids)
+        or not set(requested_ids).issubset(roof_by_id)
+    ):
+        raise HTTPException(status_code=422, detail="รายการชิ้นงานหลังคาไม่ถูกต้องหรือมีรหัสซ้ำ")
+    keyframe_ids = {
+        entry.evidence_keyframe_id
+        for entry in payload.entries
+        if entry.evidence_keyframe_id is not None
+    }
+    valid_keyframes = set(db.scalars(select(Keyframe.id).where(
+        Keyframe.capture_id == capture.id,
+        Keyframe.id.in_(keyframe_ids),
+    ))) if keyframe_ids else set()
+    if valid_keyframes != keyframe_ids:
+        raise HTTPException(status_code=422, detail="ภาพหลักฐานไม่ได้อยู่ใน Capture นี้")
+
+    latest_completed_quantity: dict[uuid.UUID, int] = {}
+    for entry in previous_entries:
+        roof = roof_by_id.get(entry.structural_element_id)
+        if roof is not None:
+            latest_completed_quantity.setdefault(
+                entry.structural_element_id,
+                _roof_completed_quantity(entry, _roof_total_quantity(roof)),
+            )
+    affected_wbs: set[str] = set()
+    for item in payload.entries:
+        roof = roof_by_id[item.structural_element_id]
+        activity_wbs = str(roof.geometry_json.get("activity_wbs", ""))
+        if not activity_wbs:
+            raise HTTPException(status_code=422, detail="ชิ้นงานหลังคาไม่มีรหัสกิจกรรม WBS")
+        affected_wbs.add(activity_wbs)
+        count_mode = str(roof.geometry_json.get("progress_mode", "")).upper() == "COUNT"
+        if item.total_quantity is not None:
+            if not count_mode:
+                raise HTTPException(status_code=422, detail="ชิ้นงานนี้ไม่ได้ตรวจแบบนับจำนวน")
+            roof.geometry_json = {**roof.geometry_json, "total_quantity": item.total_quantity}
+        total_quantity = _roof_total_quantity(roof)
+        if count_mode:
+            completed_quantity = (
+                item.completed_quantity
+                if item.completed_quantity is not None
+                else total_quantity if item.complete else 0
+            )
+            if completed_quantity > total_quantity:
+                raise HTTPException(
+                    status_code=422,
+                    detail="จำนวนที่ตรวจแล้วต้องไม่เกินจำนวนทั้งหมด",
+                )
+        else:
+            if item.complete is None:
+                raise HTTPException(status_code=422, detail="กรุณาระบุสถานะชิ้นงานหลังคา")
+            completed_quantity = int(item.complete)
+        complete = completed_quantity >= total_quantity
+        latest_completed_quantity[item.structural_element_id] = completed_quantity
+        progress_percent = (
+            Decimal(completed_quantity) / Decimal(total_quantity) * Decimal(100)
+        ).quantize(Decimal("0.001"))
+        db.add(StructuralElementProgressEntry(
+            project_id=project_id,
+            capture_id=capture_id,
+            structural_element_id=item.structural_element_id,
+            evidence_keyframe_id=item.evidence_keyframe_id,
+            progress_percent=progress_percent,
+            stage_status_json={
+                ROOF_COMPLETE_STAGE: complete,
+                **({
+                    "completed_quantity": completed_quantity,
+                    "total_quantity": total_quantity,
+                } if count_mode else {}),
+            },
+            note=(item.note or "").strip() or None,
+            entered_by_id=user.id,
+        ))
+
+    schedule = db.scalar(select(ScheduleVersion).where(
+        ScheduleVersion.project_id == project_id,
+        ScheduleVersion.status == "READY",
+        ScheduleVersion.is_baseline.is_(True),
+    ).order_by(ScheduleVersion.version_no.desc()))
+    if schedule is None:
+        schedule = db.scalar(select(ScheduleVersion).where(
+            ScheduleVersion.project_id == project_id,
+            ScheduleVersion.status == "READY",
+        ).order_by(ScheduleVersion.version_no.desc()))
+    activities_by_wbs = {
+        activity.wbs: activity
+        for activity in db.scalars(select(Activity).where(
+            Activity.schedule_version_id == schedule.id,
+            Activity.wbs.in_(affected_wbs),
+        ))
+    } if schedule else {}
+    for activity_wbs in affected_wbs:
+        activity = activities_by_wbs.get(activity_wbs)
+        if activity is None:
+            raise HTTPException(status_code=422, detail=f"ไม่พบกิจกรรมหลังคา {activity_wbs} ในแผนงาน")
+        group = [
+            roof for roof in roofs
+            if str(roof.geometry_json.get("activity_wbs", "")) == activity_wbs
+        ]
+        total = sum(_roof_total_quantity(roof) for roof in group)
+        completed = sum(
+            latest_completed_quantity.get(roof.id, 0)
+            for roof in group
+        )
+        percent = (
+            Decimal(completed) / Decimal(total) * Decimal(100)
+        ).quantize(Decimal("0.001")) if total else Decimal(0)
+        db.add(HumanProgressEntry(
+            project_id=project_id,
+            activity_id=activity.id,
+            capture_id=capture_id,
+            observed_at=capture.captured_at,
+            progress_percent=percent,
+            note=f"ผลตรวจงานหลังคา {completed}/{total} หน่วย",
+            entered_by_id=user.id,
+        ))
+    db.commit()
+    _capture, roofs, entries = _load_roof_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    return _roof_progress_result(project_id, capture_id, payload.floor_id, roofs, entries)
+
+
+@router.delete(
+    "/{project_id}/captures/{capture_id}/roof-progress",
+    response_model=RoofProgressRead,
+)
+def delete_roof_progress(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    payload: RoofProgressBulkDelete,
+    db: DbSession,
+    user: CurrentUser,
+) -> RoofProgressRead:
+    require_project_role(
+        db, project_id=project_id, user_id=user.id, allowed_roles={"admin", "sub_admin", "reviewer"}
+    )
+    capture, roofs, _previous_entries = _load_roof_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    roof_by_id = {roof.id: roof for roof in roofs}
+    requested_ids = payload.structural_element_ids
+    if (
+        len(set(requested_ids)) != len(requested_ids)
+        or not set(requested_ids).issubset(roof_by_id)
+    ):
+        raise HTTPException(status_code=422, detail="รายการชิ้นงานหลังคาไม่ถูกต้องหรือมีรหัสซ้ำ")
+
+    current_entry_ids = list(db.scalars(select(StructuralElementProgressEntry.id).where(
+        StructuralElementProgressEntry.project_id == project_id,
+        StructuralElementProgressEntry.capture_id == capture_id,
+        StructuralElementProgressEntry.structural_element_id.in_(requested_ids),
+    )))
+    if not current_entry_ids:
+        raise HTTPException(status_code=404, detail="ไม่พบผลตรวจของวันนี้สำหรับรายการที่เลือก")
+
+    affected_wbs = {
+        str(roof_by_id[element_id].geometry_json.get("activity_wbs", ""))
+        for element_id in requested_ids
+    }
+    affected_wbs.discard("")
+    db.execute(delete(StructuralElementProgressEntry).where(
+        StructuralElementProgressEntry.id.in_(current_entry_ids)
+    ))
+    db.flush()
+
+    schedule = db.scalar(select(ScheduleVersion).where(
+        ScheduleVersion.project_id == project_id,
+        ScheduleVersion.status == "READY",
+        ScheduleVersion.is_baseline.is_(True),
+    ).order_by(ScheduleVersion.version_no.desc()))
+    if schedule is None:
+        schedule = db.scalar(select(ScheduleVersion).where(
+            ScheduleVersion.project_id == project_id,
+            ScheduleVersion.status == "READY",
+        ).order_by(ScheduleVersion.version_no.desc()))
+    activities_by_wbs = {
+        activity.wbs: activity
+        for activity in db.scalars(select(Activity).where(
+            Activity.schedule_version_id == schedule.id,
+            Activity.wbs.in_(affected_wbs),
+        ))
+    } if schedule else {}
+
+    _capture, updated_roofs, updated_entries = _load_roof_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    latest: dict[uuid.UUID, StructuralElementProgressEntry] = {}
+    for entry in updated_entries:
+        latest.setdefault(entry.structural_element_id, entry)
+
+    for activity_wbs in affected_wbs:
+        activity = activities_by_wbs.get(activity_wbs)
+        if activity is None:
+            continue
+        db.execute(delete(HumanProgressEntry).where(
+            HumanProgressEntry.project_id == project_id,
+            HumanProgressEntry.capture_id == capture_id,
+            HumanProgressEntry.activity_id == activity.id,
+            HumanProgressEntry.note.like("ผลตรวจงานหลังคา %"),
+        ))
+        group = [
+            roof for roof in updated_roofs
+            if str(roof.geometry_json.get("activity_wbs", "")) == activity_wbs
+        ]
+        has_current_entry = any(
+            latest_entry.capture_id == capture_id
+            for roof in group
+            if (latest_entry := latest.get(roof.id)) is not None
+        )
+        if not has_current_entry:
+            continue
+        total = sum(_roof_total_quantity(roof) for roof in group)
+        completed = sum(
+            _roof_completed_quantity(latest.get(roof.id), _roof_total_quantity(roof))
+            for roof in group
+        )
+        percent = (
+            Decimal(completed) / Decimal(total) * Decimal(100)
+        ).quantize(Decimal("0.001")) if total else Decimal(0)
+        db.add(HumanProgressEntry(
+            project_id=project_id,
+            activity_id=activity.id,
+            capture_id=capture_id,
+            observed_at=capture.captured_at,
+            progress_percent=percent,
+            note=f"ผลตรวจงานหลังคา {completed}/{total} หน่วย",
+            entered_by_id=user.id,
+        ))
+
+    db.commit()
+    _capture, updated_roofs, updated_entries = _load_roof_progress(
+        project_id, capture_id, payload.floor_id, db
+    )
+    return _roof_progress_result(
+        project_id, capture_id, payload.floor_id, updated_roofs, updated_entries
+    )
 
 
 @router.post(
@@ -951,7 +1708,8 @@ def run_beam_ai(
         project_id, capture_id, payload.floor_id, db
     )
     return _beam_progress_result(
-        project_id, capture_id, payload.floor_id, segments, entries, predictions
+        project_id, capture_id, payload.floor_id, segments, entries, predictions,
+        _beam_stages_for_floor(db, payload.floor_id),
     )
 
 
@@ -1258,6 +2016,199 @@ def _ground_beam_activity_percent(overall: Decimal, wbs: str) -> Decimal | None:
     )
 
 
+def _latest_entry_observed_at(
+    db: DbSession,
+    entries: list[BeamProgressEntry] | list[StructuralElementProgressEntry],
+) -> datetime | None:
+    """Return the capture time represented by the newest detailed inspection."""
+    observed_at: datetime | None = None
+    capture_times: dict[uuid.UUID, datetime] = {}
+    for entry in entries:
+        if entry.capture_id not in capture_times:
+            entry_capture = db.get(Capture, entry.capture_id)
+            if entry_capture is not None:
+                capture_times[entry.capture_id] = entry_capture.captured_at
+        candidate = capture_times.get(entry.capture_id)
+        if candidate is not None and (observed_at is None or candidate > observed_at):
+            observed_at = candidate
+    return observed_at
+
+
+def _slab_type_stage_percent(
+    slabs: list[StructuralElement],
+    entries: list[StructuralElementProgressEntry],
+    slab_type: str | None,
+    stage: str,
+) -> Decimal | None:
+    latest: dict[uuid.UUID, StructuralElementProgressEntry] = {}
+    for entry in entries:
+        latest.setdefault(entry.structural_element_id, entry)
+    matching = [slab for slab in slabs if slab_type is None or _slab_type(slab) == slab_type]
+    if not matching or not any(slab.id in latest for slab in matching):
+        return None
+    total_area = sum((_slab_area_m2(slab) for slab in matching), Decimal(0))
+    if not total_area:
+        return Decimal(0)
+    completed_area = sum(
+        (
+            _slab_area_m2(slab)
+            for slab in matching
+            if slab.id in latest
+            if stage in _normalized_slab_stages(
+                slab,
+                latest[slab.id].stage_status_json,
+            )
+        ),
+        Decimal(0),
+    )
+    return (completed_area / total_area * Decimal(100)).quantize(Decimal("0.001"))
+
+
+def _detailed_structural_actuals(
+    db: DbSession,
+    project_id: uuid.UUID,
+    capture: Capture,
+) -> dict[str, tuple[Decimal, datetime | None]]:
+    """Map immutable per-element inspections to schedule leaf WBS rows."""
+    actuals: dict[str, tuple[Decimal, datetime | None]] = {}
+    floors = list(
+        db.scalars(
+            select(Floor)
+            .where(Floor.project_id == project_id)
+            .order_by(Floor.level_index)
+        )
+    )
+    for floor in floors:
+        level = floor.level_index
+        if 1 <= level <= 4:
+            _beam_capture, segments, beam_entries, predictions = _load_beam_progress(
+                project_id, capture.id, floor.id, db
+            )
+            beam_result = _beam_progress_result(
+                project_id, capture.id, floor.id, segments, beam_entries, predictions,
+                _beam_stages_for_floor(db, floor.id),
+            )
+            if beam_result.labeled_count:
+                observed_at = _latest_entry_observed_at(db, beam_entries)
+                stage_percent = {
+                    item.stage: item.progress_percent
+                    for item in beam_result.stage_summaries
+                }
+                if level == 1:
+                    beam_base = "1.2.1.3"
+                    beam_stages = FLOOR_ONE_BEAM_STAGES
+                    if beam_result.weighted_progress_percent is not None:
+                        # Some legacy schedules use 1.2.1.2 for ground beams,
+                        # while the project's current schedule uses it for
+                        # pedestals.  Keep the value under an internal key and
+                        # apply it only when the activity name identifies a beam.
+                        actuals["__FLOOR_1_BEAM_OVERALL__"] = (
+                            beam_result.weighted_progress_percent,
+                            observed_at,
+                        )
+                else:
+                    beam_base = f"1.2.{level}.1"
+                    beam_stages = UPPER_FLOOR_BEAM_STAGES
+                for suffix, stage in enumerate(beam_stages, 1):
+                    actuals[f"{beam_base}.{suffix}"] = (
+                        stage_percent.get(stage, Decimal(0)),
+                        observed_at,
+                    )
+
+            _column_capture, columns, column_entries = _load_column_progress(
+                project_id, capture.id, floor.id, db
+            )
+            column_result = _column_progress_result(
+                project_id, capture.id, floor.id, columns, column_entries
+            )
+            if column_result.labeled_count:
+                observed_at = _latest_entry_observed_at(db, column_entries)
+                column_base = "1.2.1.5" if level == 1 else f"1.2.{level}.3"
+                for suffix, summary in enumerate(column_result.stage_summaries, 1):
+                    actuals[f"{column_base}.{suffix}"] = (
+                        summary.progress_percent,
+                        observed_at,
+                    )
+
+            _slab_capture, slabs, slab_entries = _load_slab_progress(
+                project_id, capture.id, floor.id, db
+            )
+            if slab_entries:
+                observed_at = _latest_entry_observed_at(db, slab_entries)
+                if level == 1:
+                    slab_mapping = {
+                        "1.2.1.4.1": ("GS", "SOIL_COMPACTION"),
+                        "1.2.1.4.2": ("GS", "REBAR"),
+                        "1.2.1.4.3": ("S1", "REBAR"),
+                        "1.2.1.4.4": ("GS", "CONCRETE"),
+                        "1.2.1.4.5": ("S1", "CONCRETE"),
+                    }
+                else:
+                    slab_base = f"1.2.{level}.2"
+                    slab_mapping = {
+                        f"{slab_base}.1": (None, "SHORING"),
+                        f"{slab_base}.2": ("PC1", "PLACE_PRECAST"),
+                        f"{slab_base}.3": ("S1", "REBAR"),
+                        f"{slab_base}.4": ("S1", "FORMWORK"),
+                        f"{slab_base}.5": ("S1", "CONCRETE"),
+                        f"{slab_base}.6": ("PC1", "CONCRETE"),
+                    }
+                for wbs, (slab_type, stage) in slab_mapping.items():
+                    value = _slab_type_stage_percent(
+                        slabs, slab_entries, slab_type, stage
+                    )
+                    if value is not None:
+                        actuals[wbs] = (value, observed_at)
+
+            _stair_capture, stairs, stair_entries = _load_stair_progress(
+                project_id, capture.id, floor.id, db
+            )
+            stair_result = _stair_progress_result(
+                project_id, capture.id, floor.id, stairs, stair_entries,
+                _stair_stages_for_floor(db, floor.id),
+            )
+            if stair_result.labeled_count:
+                observed_at = _latest_entry_observed_at(db, stair_entries)
+                stair_base = "1.2.1.6" if level == 1 else f"1.2.{level}.4"
+                for suffix, summary in enumerate(stair_result.stage_summaries, 1):
+                    actuals[f"{stair_base}.{suffix}"] = (
+                        summary.progress_percent,
+                        observed_at,
+                    )
+
+        if level in {5, 6}:
+            _roof_capture, roofs, roof_entries = _load_roof_progress(
+                project_id, capture.id, floor.id, db
+            )
+            if roof_entries:
+                observed_at = _latest_entry_observed_at(db, roof_entries)
+                latest: dict[uuid.UUID, StructuralElementProgressEntry] = {}
+                for entry in roof_entries:
+                    latest.setdefault(entry.structural_element_id, entry)
+                grouped: dict[str, list[StructuralElement]] = {}
+                for roof in roofs:
+                    activity_wbs = str(roof.geometry_json.get("activity_wbs", ""))
+                    if activity_wbs:
+                        grouped.setdefault(activity_wbs, []).append(roof)
+                for activity_wbs, group in grouped.items():
+                    if not any(roof.id in latest for roof in group):
+                        continue
+                    total = sum(_roof_total_quantity(roof) for roof in group)
+                    completed = sum(
+                        _roof_completed_quantity(
+                            latest[roof.id], _roof_total_quantity(roof)
+                        )
+                        if roof.id in latest
+                        else 0
+                        for roof in group
+                    )
+                    value = (
+                        Decimal(completed) / Decimal(total) * Decimal(100)
+                    ).quantize(Decimal("0.001")) if total else Decimal(0)
+                    actuals[activity_wbs] = (value, observed_at)
+    return actuals
+
+
 @router.get("/{project_id}/progress/manual", response_model=list[HumanProgressRead])
 def list_human_progress(
     project_id: uuid.UUID, db: DbSession, user: CurrentUser
@@ -1275,7 +2226,7 @@ def list_human_progress(
     )
     entries: list[HumanProgressEntry] = []
     for entry, activity_wbs in rows:
-        setattr(entry, "activity_wbs", activity_wbs)
+        entry.activity_wbs = activity_wbs
         entries.append(entry)
     return entries
 
@@ -1318,8 +2269,70 @@ def create_human_progress(
     db.add(entry)
     db.commit()
     db.refresh(entry)
-    setattr(entry, "activity_wbs", activity.wbs)
+    entry.activity_wbs = activity.wbs
     return entry
+
+
+@router.post(
+    "/{project_id}/progress/manual/bulk",
+    response_model=list[HumanProgressRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def create_human_progress_bulk(
+    project_id: uuid.UUID,
+    payload: HumanProgressBulkCreate,
+    db: DbSession,
+    user: CurrentUser,
+) -> list[HumanProgressEntry]:
+    """Save one immutable human observation for every selected activity atomically."""
+    require_project_role(
+        db,
+        project_id=project_id,
+        user_id=user.id,
+        allowed_roles={"admin", "sub_admin", "reviewer"},
+    )
+    activity_ids = [row.activity_id for row in payload.entries]
+    if len(activity_ids) != len(set(activity_ids)):
+        raise HTTPException(status_code=422, detail="รายการงานมีรหัสซ้ำ")
+    activities = {
+        activity.id: activity
+        for activity in db.scalars(
+            select(Activity)
+            .join(ScheduleVersion, Activity.schedule_version_id == ScheduleVersion.id)
+            .where(
+                Activity.id.in_(activity_ids),
+                ScheduleVersion.project_id == project_id,
+            )
+        )
+    }
+    if set(activity_ids) != set(activities):
+        raise HTTPException(status_code=422, detail="มีกิจกรรมที่ไม่อยู่ในโครงการนี้")
+    capture_ids = {row.capture_id for row in payload.entries if row.capture_id is not None}
+    valid_capture_ids = set(db.scalars(select(Capture.id).where(
+        Capture.id.in_(capture_ids),
+        Capture.project_id == project_id,
+    ))) if capture_ids else set()
+    if capture_ids != valid_capture_ids:
+        raise HTTPException(status_code=422, detail="มี Capture ที่ไม่อยู่ในโครงการนี้")
+
+    saved: list[HumanProgressEntry] = []
+    for row in payload.entries:
+        entry = HumanProgressEntry(
+            project_id=project_id,
+            activity_id=row.activity_id,
+            capture_id=row.capture_id,
+            observed_at=row.observed_at,
+            progress_percent=row.progress_percent,
+            note=(row.note or "").strip() or None,
+            entered_by_id=user.id,
+        )
+        db.add(entry)
+        saved.append(entry)
+    db.commit()
+    for entry in saved:
+        db.refresh(entry)
+        entry.activity_wbs = activities[entry.activity_id].wbs
+    return saved
 
 
 @router.get("/{project_id}/progress/comparison", response_model=ProgressComparisonRead)
@@ -1335,7 +2348,10 @@ def compare_progress(
         raise HTTPException(status_code=404, detail="ไม่พบ Capture")
     schedule = db.scalar(
         select(ScheduleVersion)
-        .where(ScheduleVersion.project_id == project_id)
+        .where(
+            ScheduleVersion.project_id == project_id,
+            ScheduleVersion.status == "READY",
+        )
         .order_by(ScheduleVersion.is_baseline.desc(), ScheduleVersion.version_no.desc())
     )
     if schedule is None:
@@ -1367,64 +2383,27 @@ def compare_progress(
     for row, activity_wbs in human_rows:
         latest_human.setdefault(row.activity_id, row)
         latest_human_by_wbs.setdefault(activity_wbs, row)
-    beam_human_rows = list(
-        db.scalars(
-            select(BeamProgressEntry)
-            .where(
-                BeamProgressEntry.project_id == project_id,
-                BeamProgressEntry.capture_id == capture.id,
-            )
-            .order_by(BeamProgressEntry.created_at.desc())
-        )
-    )
-    latest_beam_human: dict[uuid.UUID, BeamProgressEntry] = {}
-    for row in beam_human_rows:
-        latest_beam_human.setdefault(row.beam_segment_id, row)
-    relevant_segment_ids = set(latest_beam_human)
-    segment_lengths = {
-        segment.id: segment.length_m or Decimal(1)
-        for segment in db.scalars(
-            select(BeamSegment).where(BeamSegment.id.in_(relevant_segment_ids))
-        )
-    } if relevant_segment_ids else {}
-    beam_human_weight = sum(
-        (
-            segment_lengths.get(entry.beam_segment_id, Decimal(1))
-            for entry in latest_beam_human.values()
-        ),
-        Decimal(0),
-    )
-    beam_human_actual = (
-        sum(
-            (
-                entry.progress_percent
-                * segment_lengths.get(entry.beam_segment_id, Decimal(1))
-                for entry in latest_beam_human.values()
-            ),
-            Decimal(0),
-        )
-        / beam_human_weight
-        if beam_human_weight
-        else None
-    )
-    beam_human_observed_at = max(
-        (entry.created_at for entry in latest_beam_human.values()), default=None
-    )
+    detailed_actuals = _detailed_structural_actuals(db, project_id, capture)
     items: list[ProgressComparisonItem] = []
     for activity in activities:
         planned = _planned_percent(
             activity.planned_start, activity.planned_finish, capture.captured_at
         )
         human = latest_human.get(activity.id) or latest_human_by_wbs.get(activity.wbs)
-        mapped_human = (
-            _ground_beam_activity_percent(beam_human_actual, activity.wbs)
-            if beam_human_actual is not None
-            else None
-        )
-        actual = mapped_human if mapped_human is not None else (
+        detailed = detailed_actuals.get(activity.wbs)
+        if detailed is None and "คาน" in activity.name:
+            floor_one_beam = detailed_actuals.get("__FLOOR_1_BEAM_OVERALL__")
+            mapped = (
+                _ground_beam_activity_percent(floor_one_beam[0], activity.wbs)
+                if floor_one_beam is not None
+                else None
+            )
+            if mapped is not None:
+                detailed = (mapped, floor_one_beam[1])
+        actual = detailed[0] if detailed is not None else (
             human.progress_percent if human else None
         )
-        observed_at = beam_human_observed_at if mapped_human is not None else (
+        observed_at = detailed[1] if detailed is not None else (
             human.observed_at if human else None
         )
         items.append(

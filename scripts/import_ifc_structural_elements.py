@@ -396,6 +396,19 @@ def reviewed_slab_zones(level: int) -> list[dict[str, object]]:
     return zones
 
 
+def reviewed_slab_type(level: int, zone_id: str) -> str | None:
+    """Return the slab mark read from the reviewed structural floor sheet."""
+    if level == 1:
+        return "S1" if "-D-EXT-" in zone_id else "GS"
+    if level < 1:
+        return None
+    is_pc1 = zone_id.endswith(("-B-C", "-C-D")) or zone_id in {
+        "3-A-B",
+        "5-A-B",
+    }
+    return "PC1" if is_pc1 else "S1"
+
+
 def reviewed_slab_geometry(level: int, zone: dict[str, object]) -> dict[str, object]:
     """Build the visible/selectable clear-floor polygon for one reviewed zone."""
     x1, x2 = float(zone["x1"]), float(zone["x2"])
@@ -415,7 +428,7 @@ def reviewed_slab_geometry(level: int, zone: dict[str, object]) -> dict[str, obj
         inset_y = (BEAM_WIDTH_M / 2 / 9.90) * (PLAN_GRID_Y[-1] - PLAN_GRID_Y[0])
     else:
         inset_x = inset_y = 0.002
-    return {
+    geometry = {
         "area_m2": zone["area_m2"],
         **(
             {
@@ -432,6 +445,13 @@ def reviewed_slab_geometry(level: int, zone: dict[str, object]) -> dict[str, obj
             [x1 + inset_x, y2 - inset_y],
         ],
     }
+    slab_type = reviewed_slab_type(level, str(zone["id"]))
+    if slab_type:
+        geometry["slab_type"] = slab_type
+        geometry["slab_workflow"] = (
+            "S1_FLOOR_1" if level == 1 and slab_type == "S1" else slab_type
+        )
+    return geometry
 
 
 def _normalized(point: list[float]) -> list[float]:

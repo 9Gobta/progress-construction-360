@@ -27,7 +27,6 @@ export default async function CapturesPage({ params }: { params: Promise<{ proje
           <p className="sidebar-label">{project.name}</p>
           <nav>
             <Link href="/projects">← โครงการทั้งหมด</Link>
-            <span>ภาพรวม</span><span>แบบและพื้นที่</span>
             <Link href={`/projects/${projectId}/schedule`}>แผนงานและ Progress</Link>
             <Link className="is-active" href={`/projects/${projectId}/captures`}>Captures</Link>
             <Link href={`/projects/${projectId}/dashboard`}>Dashboard</Link>
@@ -39,7 +38,7 @@ export default async function CapturesPage({ params }: { params: Promise<{ proje
           <div className="workspace-heading">
             <div><p className="eyebrow">SITE CAPTURE · SPATIAL RECORD</p><h1>Captures 360°</h1><p>อัปโหลดวิดีโอ 360 จากหน้างานเพื่อสร้างเส้นทางและหลักฐาน Progress</p></div>
           </div>
-          <CaptureUploader captures={captures} floors={floors} projectId={projectId} role={project.role} storageStatus={storageStatus} />
+          <CaptureUploader captures={captures} floors={floors} projectId={projectId} role={project.role} storageStatus={storageStatus} structuralTrackingEndDate={project.structural_tracking_end_date} />
         </main>
       </div>
     </div>

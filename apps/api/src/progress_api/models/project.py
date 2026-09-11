@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text, Uuid
+from sqlalchemy import Date, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from progress_api.db import Base
@@ -21,6 +22,7 @@ class Project(TimestampMixin, Base):
     location: Mapped[str | None] = mapped_column(String(300), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Bangkok")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    structural_tracking_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_by_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), index=True)
 
     memberships: Mapped[list[ProjectMember]] = relationship(

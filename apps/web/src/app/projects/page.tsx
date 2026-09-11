@@ -21,8 +21,6 @@ export default async function ProjectsPage() {
           <p className="sidebar-label">WORKSPACE</p>
           <nav>
             <Link className="is-active" href="/projects">โครงการ</Link>
-            <span>แบบและพื้นที่</span><span>Schedule</span><span>Capture</span>
-            <span>ตรวจ Progress</span><span>Dashboard</span><span>Reports</span>
           </nav>
         </aside>
         <main className="workspace-main">

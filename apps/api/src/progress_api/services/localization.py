@@ -410,8 +410,16 @@ def _transform_with_fixed_start(
     rotation = math.radians(rotation_deg)
     cos_r = math.cos(rotation)
     sin_r = math.sin(rotation)
-    return [
-        (
+    transformed: list[tuple[float, float, float]] = []
+    for x, y, heading in relative:
+        # Stella's equirectangular yaw is atan2(forward X, forward Z): zero
+        # therefore maps to the visual Y/Z axis. Positions use [x, y], so the
+        # matching heading vector is [sin(yaw), cos(yaw)], not [cos, sin].
+        direction_x = math.sin(math.radians(heading))
+        direction_y = math.cos(math.radians(heading)) * (-1 if mirror else 1)
+        plan_direction_x = direction_x * cos_r - direction_y * sin_r
+        plan_direction_y = direction_x * sin_r + direction_y * cos_r
+        transformed.append((
             min(
                 1.0,
                 max(
@@ -428,10 +436,9 @@ def _transform_with_fixed_start(
                     + scale * (x * sin_r + (-y if mirror else y) * cos_r),
                 ),
             ),
-            ((-heading if mirror else heading) + rotation_deg) % 360.0,
-        )
-        for x, y, heading in relative
-    ]
+            math.degrees(math.atan2(plan_direction_y, plan_direction_x)) % 360.0,
+        ))
+    return transformed
 
 
 def _estimate_prior_similarity(
@@ -732,7 +739,7 @@ def _transform_with_fixed_start_affine(
     for x, y, heading in relative:
         plan_delta = np.asarray([x, y]) @ matrix
         direction = np.asarray(
-            [math.cos(math.radians(heading)), math.sin(math.radians(heading))]
+            [math.sin(math.radians(heading)), math.cos(math.radians(heading))]
         ) @ matrix
         plan_heading = math.degrees(math.atan2(direction[1], direction[0])) % 360.0
         transformed.append(
@@ -2016,6 +2023,7 @@ def realign_existing_camera_poses(
     # for the remainder of the video. Do not reuse that frozen trajectory for
     # relocalization. Force a fresh run, whose Stella adapter can recover it in
     # overlapping segments.
+    first_motion_timestamp: int | None = None
     last_motion_timestamp = rows[0][0].timestamp_ms
     previous_x = float(rows[0][1].visual_x)
     previous_y = float(rows[0][1].visual_y)
@@ -2023,11 +2031,15 @@ def realign_existing_camera_poses(
         x = float(pose.visual_x)
         y = float(pose.visual_y)
         if math.hypot(x - previous_x, y - previous_y) > 1e-5:
+            if first_motion_timestamp is None:
+                first_motion_timestamp = keyframe.timestamp_ms
             last_motion_timestamp = keyframe.timestamp_ms
         previous_x, previous_y = x, y
     final_timestamp = rows[-1][0].timestamp_ms
+    frozen_prefix_ms = first_motion_timestamp or final_timestamp
     frozen_tail_ms = final_timestamp - last_motion_timestamp
-    if frozen_tail_ms > max(10_000, int(final_timestamp * 0.25)):
+    frozen_limit_ms = max(10_000, int(final_timestamp * 0.25))
+    if frozen_prefix_ms > frozen_limit_ms or frozen_tail_ms > frozen_limit_ms:
         return None
 
     relative_samples = [
@@ -2124,7 +2136,10 @@ def realign_existing_camera_poses(
 
 def localize_capture_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
     job = db.get(ProcessingJob, job_id)
-    if job is not None and job.status == "SUCCEEDED":
+    # Celery messages can outlive a user cancellation.  Treat terminal jobs as
+    # idempotent so a stale queue message cannot revive the job and overwrite
+    # the capture's existing route.
+    if job is not None and job.status in {"SUCCEEDED", "CANCELLED"}:
         pose_count = db.scalar(
             select(func.count(CameraPose.id))
             .join(Keyframe, CameraPose.keyframe_id == Keyframe.id)

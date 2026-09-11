@@ -175,6 +175,29 @@ def learned_panorama_matches(
     from hloc import extract_features, match_features, pairs_from_retrieval
 
     settings = get_settings()
+    # Running retrieval over every panorama in a long 8K walk can create well
+    # over a thousand LightGlue pairs.  On Windows the native PyTorch runtime
+    # may abort the entire Celery process (rather than raise MemoryError),
+    # leaving the job stuck at 75%.  A uniformly sampled set still covers the
+    # full route and is sufficient for the rigid plan alignment.
+    maximum_current_panoramas = 24
+    current_indices = list(range(len(current_paths)))
+    if len(current_paths) > maximum_current_panoramas:
+        current_indices = np.linspace(
+            0, len(current_paths) - 1, maximum_current_panoramas, dtype=int
+        ).tolist()
+        current_paths = [current_paths[index] for index in current_indices]
+    maximum_reference_panoramas = max(8, settings.hloc_max_reference_images // 4)
+    reference_indices = list(range(len(reference_paths)))
+    if len(reference_paths) > maximum_reference_panoramas:
+        reference_indices = np.linspace(
+            0,
+            len(reference_paths) - 1,
+            maximum_reference_panoramas,
+            dtype=int,
+        ).tolist()
+        reference_paths = [reference_paths[index] for index in reference_indices]
+
     image_dir = workspace / "learned-images"
     current_names = _render_views(current_paths, image_dir, "current")
     reference_names = _render_views(reference_paths, image_dir, "reference")
@@ -226,7 +249,10 @@ def learned_panorama_matches(
         )
         if score >= settings.hloc_min_geometric_inliers:
             panorama_scores[
-                (_panorama_index(query_name), _panorama_index(reference_name))
+                (
+                    current_indices[_panorama_index(query_name)],
+                    reference_indices[_panorama_index(reference_name)],
+                )
             ].append(score)
 
     scored: list[tuple[int, int, int]] = []

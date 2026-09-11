@@ -9,8 +9,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 
-from sqlalchemy import select
-
 from progress_api.db import SessionLocal
 from progress_api.models import CameraPose, Capture, Keyframe, MediaFile
 from progress_api.object_storage import download_media_file
@@ -22,7 +20,7 @@ from progress_api.services.video_pipeline import (
     build_spatial_visibility_targets,
     select_spatial_warp_points,
 )
-
+from sqlalchemy import select
 
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
 
@@ -176,7 +174,7 @@ def main() -> None:
         save_status(current=capture_id)
         try:
             result = backfill(capture_id, apply=args.apply, backup_root=args.backup_root)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - continue auditing the remaining captures
             result = {
                 "capture_id": str(capture_id),
                 "applied": False,

@@ -18,8 +18,6 @@ from pathlib import Path
 
 import numpy as np
 import pycolmap
-from sqlalchemy import select
-
 from progress_api.db import SessionLocal
 from progress_api.models import CameraPose, Keyframe, PathEvaluationPoint
 from progress_api.services.video_pipeline import (
@@ -27,7 +25,7 @@ from progress_api.services.video_pipeline import (
     build_spatial_visibility_targets,
     select_spatial_warp_points,
 )
-
+from sqlalchemy import select
 
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
 # Derived from the authoritative 20/12 Preimage reconstruction aligned to this
@@ -230,7 +228,7 @@ def constrain(
             for _keyframe, evaluation, _pose in evaluation_rows:
                 evaluation.predicted_x = evaluation.target_x
                 evaluation.predicted_y = evaluation.target_y
-                evaluation.error_normalized = Decimal("0")
+                evaluation.error_normalized = Decimal(0)
                 evaluation.is_within_tolerance = True
             db.commit()
         horizontal_length = float(

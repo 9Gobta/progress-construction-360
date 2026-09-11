@@ -29,7 +29,6 @@ export default async function Home() {
               <Link className="button button-primary" href={user ? "/projects" : "/login"}>
                 {user ? "เปิดพื้นที่โครงการ" : "เริ่มตั้งค่าระบบ"}
               </Link>
-              <span className="button button-secondary" aria-disabled="true">คู่มือกำลังจัดทำ</span>
             </div>
           </div>
 

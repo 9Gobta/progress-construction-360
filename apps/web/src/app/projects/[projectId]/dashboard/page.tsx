@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppHeader } from "@/components/app-header";
 import { ProgressTrackDashboard } from "@/components/progress-track-dashboard";
-import { getActivities, getCaptures, getCurrentUser, getFloors, getHumanProgress, getProject, getSchedules } from "@/lib/server-api";
+import { getActivities, getCaptures, getCurrentUser, getFloors, getHumanProgress, getProgressComparison, getProject, getSchedules, getStructuralElements } from "@/lib/server-api";
 
 export default async function DashboardPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams: Promise<{ captureId?: string }> }) {
   const user = await getCurrentUser();
@@ -16,7 +16,16 @@ export default async function DashboardPage({ params, searchParams }: { params: 
   const schedule = schedules.find((item) => item.is_baseline && item.status === "READY")
     ?? schedules.find((item) => item.status === "READY") ?? null;
   const activities = schedule ? await getActivities(projectId, schedule.id) : [];
-  const captureId = query.captureId ?? captures[0]?.id ?? null;
+  const structuralElements = (await Promise.all(
+    floors.map((floor) => getStructuralElements(projectId, floor.id).catch(() => [])),
+  )).flat();
+  const requestedCaptureId = query.captureId;
+  const captureId = captures.some((item) => item.id === requestedCaptureId)
+    ? requestedCaptureId!
+    : captures[0]?.id ?? null;
+  const comparison = schedule && captureId
+    ? await getProgressComparison(projectId, captureId)
+    : null;
 
   return <div className="app-frame"><AppHeader user={user} /><div className="workspace">
     <aside className="sidebar"><p className="sidebar-label">{project.name}</p><nav>
@@ -28,7 +37,7 @@ export default async function DashboardPage({ params, searchParams }: { params: 
       <div className="workspace-heading"><div><p className="eyebrow">HUMAN PROGRESS TRACKING</p><h1>ติดตาม Progress งานโครงสร้าง</h1><p>ภาพรวมทุกชั้น งานคงเหลือ หลักฐานภาพ 360 และ Productivity เทียบแผน</p></div>
         {schedule && <div className="version-chip"><span>แผนที่ใช้งาน</span><strong>{schedule.name}</strong><small>{schedule.row_count} กิจกรรม · Version {schedule.version_no}</small></div>}
       </div>
-      {schedule ? <ProgressTrackDashboard activities={activities} captures={captures} floors={floors} initialCaptureId={captureId} progress={progress} projectId={projectId} /> : <div className="empty-state"><strong>ยังไม่มีแผนงานที่พร้อมใช้</strong><p>นำเข้า Excel ในหน้าแผนงานก่อนเปิด Dashboard</p></div>}
+      {schedule ? <ProgressTrackDashboard key={captureId} activities={activities} captures={captures} comparison={comparison} floors={floors} initialCaptureId={captureId} progress={progress} projectId={projectId} structuralElements={structuralElements} /> : <div className="empty-state"><strong>ยังไม่มีแผนงานที่พร้อมใช้</strong><p>นำเข้า Excel ในหน้าแผนงานก่อนเปิด Dashboard</p></div>}
     </main>
   </div></div>;
 }

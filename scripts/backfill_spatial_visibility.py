@@ -5,10 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import uuid
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
-
-from sqlalchemy import select
 
 from progress_api.db import SessionLocal
 from progress_api.models import CameraPose, Capture, Keyframe
@@ -16,7 +14,7 @@ from progress_api.services.video_pipeline import (
     TourStationSample,
     build_spatial_visibility_targets,
 )
-
+from sqlalchemy import select
 
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
 
@@ -35,8 +33,6 @@ def apply_capture(capture_id: uuid.UUID, *, apply: bool, backup_root: Path) -> d
         )
         if not rows:
             return {"capture_id": str(capture_id), "skipped": "no-camera-poses"}
-        if not any("pycolmap-spatial-v1" in pose.algorithm for _keyframe, pose in rows):
-            return {"capture_id": str(capture_id), "skipped": "no-spatial-track"}
 
         samples = [
             TourStationSample(
@@ -56,6 +52,21 @@ def apply_capture(capture_id: uuid.UUID, *, apply: bool, backup_root: Path) -> d
         selected = {keyframe.frame_index for keyframe, _pose in rows if keyframe.is_warp_point}
         graph = build_spatial_visibility_targets(samples, selected)
         keyframe_by_index = {keyframe.frame_index: keyframe for keyframe, _pose in rows}
+        expected = {
+            keyframe_by_index[source].id: [keyframe_by_index[target].id for target in targets]
+            for source, targets in graph.items()
+        }
+        current = {
+            keyframe.id: [uuid.UUID(value) for value in json.loads(pose.visibility_target_ids)]
+            for keyframe, pose in rows
+            if pose.visibility_target_ids is not None
+        }
+        if current == expected:
+            return {
+                "capture_id": str(capture_id),
+                "stations": len(graph),
+                "skipped": "already-current",
+            }
         backup = {
             "capture_id": str(capture_id),
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -107,14 +118,16 @@ def main() -> None:
     args = parser.parse_args()
     capture_ids = list(args.capture_ids)
     if args.project_id and args.confirmed_through:
-        cutoff_date = datetime.strptime(args.confirmed_through, "%Y-%m-%d").date()
-        cutoff = datetime.combine(cutoff_date, time.max)
+        cutoff_date = date.fromisoformat(args.confirmed_through)
+        cutoff = datetime.combine(cutoff_date, time.max, tzinfo=timezone.utc)
         start = (
             datetime.combine(
-                datetime.strptime(args.confirmed_from, "%Y-%m-%d").date(), time.min
+                date.fromisoformat(args.confirmed_from),
+                time.min,
+                tzinfo=timezone.utc,
             )
             if args.confirmed_from
-            else datetime.min
+            else datetime.min.replace(tzinfo=timezone.utc)
         )
         with SessionLocal() as db:
             capture_ids.extend(

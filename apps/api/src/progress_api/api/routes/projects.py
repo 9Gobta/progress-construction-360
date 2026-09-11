@@ -5,13 +5,15 @@ from sqlalchemy import func, select
 
 from progress_api.access import require_project_role
 from progress_api.dependencies import CurrentUser, DbSession
-from progress_api.models import Project, ProjectMember, User
+from progress_api.models import Capture, ProcessingJob, Project, ProjectMember, User
+from progress_api.object_storage import delete_objects_with_prefix
 from progress_api.schemas.project import (
     ProjectCreate,
     ProjectMemberCreate,
     ProjectMemberRead,
     ProjectMemberUpdate,
     ProjectRead,
+    ProjectScopeUpdate,
 )
 
 router = APIRouter()
@@ -40,6 +42,7 @@ def create_project(payload: ProjectCreate, db: DbSession, user: CurrentUser) -> 
         location=payload.location.strip() if payload.location else None,
         timezone=payload.timezone,
         description=payload.description.strip() if payload.description else None,
+        structural_tracking_end_date=payload.structural_tracking_end_date,
         created_by_id=user.id,
     )
     project.memberships.append(ProjectMember(user_id=user.id, role="admin"))
@@ -47,6 +50,28 @@ def create_project(payload: ProjectCreate, db: DbSession, user: CurrentUser) -> 
     db.commit()
     db.refresh(project)
     return _read_project(project, "admin")
+
+
+@router.patch("/{project_id}/scope", response_model=ProjectRead)
+def update_project_scope(
+    project_id: uuid.UUID,
+    payload: ProjectScopeUpdate,
+    db: DbSession,
+    user: CurrentUser,
+) -> ProjectRead:
+    role = require_project_role(
+        db,
+        project_id=project_id,
+        user_id=user.id,
+        allowed_roles={"admin"},
+    )
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ไม่พบโครงการ")
+    project.structural_tracking_end_date = payload.structural_tracking_end_date
+    db.commit()
+    db.refresh(project)
+    return _read_project(project, role)
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -60,6 +85,41 @@ def get_project(project_id: uuid.UUID, db: DbSession, user: CurrentUser) -> Proj
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ไม่พบโครงการ")
     project, role = row
     return _read_project(project, role)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project(project_id: uuid.UUID, db: DbSession, user: CurrentUser) -> None:
+    require_project_role(
+        db,
+        project_id=project_id,
+        user_id=user.id,
+        allowed_roles={"admin"},
+    )
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ไม่พบโครงการ")
+    active_job = db.scalar(
+        select(ProcessingJob.id)
+        .join(Capture, Capture.id == ProcessingJob.capture_id)
+        .where(
+            Capture.project_id == project_id,
+            ProcessingJob.status.in_(["QUEUED", "RUNNING"]),
+        )
+    )
+    if active_job is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="โครงการยังมี Capture ที่กำลังประมวลผล กรุณารอให้งานจบก่อนลบ",
+        )
+
+    db.delete(project)
+    db.commit()
+    try:
+        delete_objects_with_prefix(prefix=f"projects/{project_id}/")
+    except Exception:
+        # The project is already gone from the database. A failed best-effort
+        # object cleanup must not make the deleted project reappear.
+        pass
 
 
 def _member_read(member: ProjectMember, member_user: User) -> ProjectMemberRead:

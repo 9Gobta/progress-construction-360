@@ -7,10 +7,19 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json();
     const result = await authenticate("login", payload);
+    const forwardedProtocol = request.headers
+      .get("x-forwarded-proto")
+      ?.split(",")[0]
+      ?.trim();
+    const usesHttps =
+      forwardedProtocol === "https" || new URL(request.url).protocol === "https:";
     (await cookies()).set(SESSION_COOKIE, result.access_token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      // Cloudflare terminates HTTPS before forwarding to the local Next server.
+      // Deriving this per request keeps the tunnel cookie secure while allowing
+      // the same production build to work on http://localhost during site work.
+      secure: usesHttps,
       path: "/",
       maxAge: result.expires_in,
     });
@@ -21,4 +30,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ detail }, { status });
   }
 }
-

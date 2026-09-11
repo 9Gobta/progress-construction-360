@@ -1,13 +1,20 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+
+const subscribeToHydration = () => () => undefined;
 
 export function AuthForm() {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const ready = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -20,19 +27,41 @@ export function AuthForm() {
       ...(mode === "register" ? { display_name: String(form.get("display_name") ?? "") } : {}),
     };
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
     try {
       const response = await fetch(`/api/session/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.detail ?? "ไม่สามารถเข้าสู่ระบบได้");
+      const contentType = response.headers.get("content-type") ?? "";
+      const body = contentType.includes("application/json")
+        ? await response.json()
+        : null;
+      if (!response.ok) {
+        const serviceUnavailable = response.status >= 500;
+        throw new Error(
+          body?.detail ??
+            (serviceUnavailable
+              ? "เซิร์ฟเวอร์กำลังหยุดทำงาน กรุณาแจ้งผู้ดูแลระบบและลองใหม่"
+              : "ไม่สามารถเข้าสู่ระบบได้"),
+        );
+      }
+      if (!body) throw new Error("เซิร์ฟเวอร์ตอบกลับไม่สมบูรณ์ กรุณาลองใหม่");
       router.push("/projects");
       router.refresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง");
+      setError(
+        reason instanceof DOMException && reason.name === "AbortError"
+          ? "การเชื่อมต่อใช้เวลานานเกินไป กรุณารีเฟรชหน้าแล้วลองอีกครั้ง"
+          : reason instanceof Error
+            ? reason.message
+            : "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง",
+      );
     } finally {
+      window.clearTimeout(timeout);
       setPending(false);
     }
   }
@@ -49,7 +78,7 @@ export function AuthForm() {
           สร้างบัญชี
         </button>
       </div>
-      <form className="form-stack" onSubmit={submit}>
+      <form className="form-stack" method="post" onSubmit={submit}>
         {mode === "register" && (
           <div className="field">
             <label htmlFor="display_name">ชื่อที่แสดง</label>
@@ -73,11 +102,16 @@ export function AuthForm() {
           />
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="button button-primary button-block" disabled={pending} type="submit">
-          {pending ? "กำลังดำเนินการ…" : mode === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชีและเข้าสู่ระบบ"}
+        <button className="button button-primary button-block" disabled={pending || !ready} type="submit">
+          {!ready
+            ? "กำลังเตรียมระบบ…"
+            : pending
+              ? "กำลังดำเนินการ…"
+              : mode === "login"
+                ? "เข้าสู่ระบบ"
+                : "สร้างบัญชีและเข้าสู่ระบบ"}
         </button>
       </form>
     </div>
   );
 }
-

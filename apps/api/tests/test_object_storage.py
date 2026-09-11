@@ -5,6 +5,42 @@ import pytest
 from progress_api import object_storage
 
 
+def test_delete_objects_with_prefix_deletes_every_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.deleted: list[list[dict[str, str]]] = []
+
+        def list_objects_v2(self, **request):
+            assert request["Prefix"] == "projects/demo/"
+            if "ContinuationToken" not in request:
+                return {
+                    "Contents": [{"Key": "projects/demo/a"}],
+                    "IsTruncated": True,
+                    "NextContinuationToken": "page-2",
+                }
+            assert request["ContinuationToken"] == "page-2"
+            return {
+                "Contents": [{"Key": "projects/demo/b"}],
+                "IsTruncated": False,
+            }
+
+        def delete_objects(self, **request):
+            self.deleted.append(request["Delete"]["Objects"])
+
+    client = FakeClient()
+    monkeypatch.setattr(object_storage, "get_s3_client", lambda: client)
+
+    deleted = object_storage.delete_objects_with_prefix(prefix="projects/demo/")
+
+    assert deleted == 2
+    assert client.deleted == [
+        [{"Key": "projects/demo/a"}],
+        [{"Key": "projects/demo/b"}],
+    ]
+
+
 def test_download_external_media_recovers_unique_file_by_capture_date(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

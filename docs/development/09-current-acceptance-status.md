@@ -3,26 +3,31 @@
 > **Scope v2:** ค่า Actual มาจากผู้ตรวจเท่านั้น AI/CV ใช้เฉพาะ Localization
 > ตาราง AI Progress ตอนท้ายเป็นผลประวัติ Baseline 1.0 และไม่นับเป็นเกณฑ์ผ่านปัจจุบัน
 
-อัปเดตวันที่ 2 กันยายน 2569
+อัปเดตวันที่ 9 กันยายน 2569
 
 ## สถานะปัจจุบันตาม Scope v2
 
 | หมวด | ผลล่าสุด | สถานะ |
 |---|---:|---|
 | Localization | Accuracy 90.0% บน Final Holdout `690111` | ผ่าน |
-| Human Progress UI | คาน เสา พื้น งานโครงสร้างหลังคา และ Dashboard ใช้ผลตรวจโดยผู้ใช้ | ผ่าน |
+| Human Progress UI | คาน เสา พื้น งานโครงสร้างหลังคา รองรับเลือกหลายชิ้น/บันทึกพร้อมกัน และ Dashboard ใช้ผลตรวจโดยผู้ใช้ | ผ่าน |
 | No Progress AI | ไม่มีปุ่ม/route AI ใน Web; Backend legacy run/evaluation ตอบ `410 Gone` | ผ่าน |
 | Structural inventory | 618 องค์ประกอบที่ Active | ผ่าน |
 | Beam geometry | 219 คาน มีความยาวครบ รวม 662.850 ม. | รอตรวจมือ |
 | Slab geometry | 115 พื้น มีพื้นที่ครบ รวม 800.634 ตร.ม. | รอตรวจมือ |
-| Capture processing | 211 Capture: READY 36, REVIEW_REQUIRED 174, FAILED 1 | มีข้อจำกัด |
-| Quality checks | Web lint/typecheck/build, API tests และ Alembic check | ผ่าน |
+| Capture processing | ขอบเขตโครงสร้างถึง 03/07/2569 มี 131 Capture: READY 130, REVIEW_REQUIRED 1; อีก 80 Capture หลังวันตัดยอดเป็นงานสถาปัตย์และถูกซ่อนโดยไม่ลบประวัติ | พร้อมให้ผู้ใช้ตรวจ Virtual Tour; ยังไม่ถือว่าผู้ใช้ยอมรับตำแหน่ง |
+| Runtime services | Web, API, MinIO, Redis, Celery Worker และ Cloudflare Tunnel ตรวจสุขภาพแล้ว; Worker ping ผ่าน | ผ่าน |
+| New Stella localization | ทดสอบคลิป 360 จริง 20 วินาที: SUCCEEDED, 40 Keyframes และ 40 Camera Poses; Auto Start ซ่อม Docker runtime ที่ค้างได้ | ผ่านสำหรับ MP4 360 ที่ Stitch แล้ว |
+| Quality checks | Web 7 tests/lint/typecheck/build, API 142 tests/Ruff, Alembic head และ browser E2E ทั้ง localhost/ลิงก์ออนไลน์ | ผ่าน |
 
 ## งานที่ยังต้องใช้ผู้ตรวจ
 
 1. ตรวจความยาวคานและพื้นที่พื้นเทียบแบบจริงด้วยมือก่อนนำไปสรุป Progress
-2. ตรวจ Capture ที่เป็น `REVIEW_REQUIRED` ตามหลักฐานหน้างาน ไม่ถือว่าเป็นความล้มเหลวอัตโนมัติ
-3. Capture ที่ Failed หนึ่งรายการต้องมีไฟล์ต้นทางที่ถูกต้องก่อน Retry
+2. ผู้ใช้ยังไม่ได้ตรวจรับ Virtual Tour ทั้งชุด สถานะ `READY` หมายถึงระบบประมวลผลตำแหน่งได้ ไม่ได้หมายความว่าผู้ใช้ยืนยันตำแหน่งแล้ว
+3. Capture วันที่ 03/07/2569 จำนวน 1 รายการยังเป็น `REVIEW_REQUIRED` ต้องเทียบภาพ 360 กับแปลนและยืนยันโดยผู้ตรวจ
+4. Capture วันที่ 19 มีนาคม 2569 ยังเปิดจาก Route เดิมได้ แต่ต้องนำไฟล์ต้นฉบับภายนอกกลับมาก่อนจึงจะประมวลผลตำแหน่งใหม่ได้
+
+ไฟล์รับเข้าที่ใช้งานจริงกำหนดเป็น MP4 360 แบบ Equirectangular ที่ Stitch แล้วเท่านั้น; `.insv` ไม่อยู่ในขอบเขตปัจจุบัน
 
 ## ผล AI Progress เดิม (Archived Baseline 1.0)
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FormEvent, MouseEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { Capture, Floor, MultipartInitiate, MultipartStatus, StorageStatus } from "@/lib/types";
+import type { Capture, Floor, MultipartComplete, MultipartInitiate, MultipartStatus, StorageStatus } from "@/lib/types";
 
 type Props = {
   projectId: string;
@@ -13,6 +13,7 @@ type Props = {
   floors: Floor[];
   captures: Capture[];
   storageStatus: StorageStatus | null;
+  structuralTrackingEndDate: string | null;
 };
 
 type ActiveUpload = {
@@ -59,13 +60,17 @@ function captureDateLabel(value: string) {
   }).format(new Date(value));
 }
 
-export function CaptureUploader({ projectId, role, floors, captures, storageStatus }: Props) {
+export function CaptureUploader({ projectId, role, floors, captures, storageStatus, structuralTrackingEndDate }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [floorId, setFloorId] = useState(floors[0]?.id ?? "");
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null);
-  const [capturedAt, setCapturedAt] = useState(localDateTimeValue);
+  const [capturedAt, setCapturedAt] = useState(() => (
+    structuralTrackingEndDate
+      ? `${structuralTrackingEndDate}T10:00`
+      : localDateTimeValue()
+  ));
   const [datasetSplit, setDatasetSplit] = useState<"DEVELOPMENT" | "HOLDOUT_TEST">("DEVELOPMENT");
   const [camera, setCamera] = useState("Insta360 X5");
   const [notes, setNotes] = useState("");
@@ -82,6 +87,7 @@ export function CaptureUploader({ projectId, role, floors, captures, storageStat
     () => new Map(floors.map((floor) => [floor.id, floor])),
     [floors],
   );
+  const selectedFloor = floorById.get(floorId) ?? null;
   const captureGroups = useMemo(() => {
     const groups = new Map<string, Capture[]>();
     for (const capture of captures) {
@@ -196,7 +202,7 @@ export function CaptureUploader({ projectId, role, floors, captures, storageStat
     if (finished.uploaded_parts.length !== context.partCount) {
       throw new Error("เซิร์ฟเวอร์ยังตรวจพบ Parts ไม่ครบ กด Retry เพื่อส่งเฉพาะส่วนที่ขาด");
     }
-    await jsonResponse(await fetch(`${statusUrl}/complete`, {
+    return jsonResponse<MultipartComplete>(await fetch(`${statusUrl}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -251,13 +257,13 @@ export function CaptureUploader({ projectId, role, floors, captures, storageStat
         context = { ...context, captureCreated: true };
         setActiveUpload(context);
       }
-      await uploadMissingParts(context, file);
-      setMessage("อัปโหลดครบแล้ว ระบบสร้างงานตรวจวิดีโอและเข้าคิวประมวลผลแล้ว");
+      const completed = await uploadMissingParts(context, file);
+      setMessage("อัปโหลดครบแล้ว กำลังเปิดหน้ารอประมวลผลอัตโนมัติ");
       setUploadPercent(100);
       setActiveUpload(null);
       setFile(null);
       setFileInputKey((value) => value + 1);
-      router.refresh();
+      router.push(`/projects/${projectId}/captures/${completed.capture_id}?mode=track`);
     } catch (error) {
       setMessage(`${error instanceof Error ? error.message : "Upload ไม่สำเร็จ"} — เลือกไฟล์เดิมไว้แล้วกด Retry ได้`);
     } finally {
@@ -285,13 +291,13 @@ export function CaptureUploader({ projectId, role, floors, captures, storageStat
         captureCreated: true,
       };
       setActiveUpload(context);
-      await uploadMissingParts(context, file);
-      setMessage("Resume สำเร็จ ไฟล์ครบและเข้าคิวประมวลผลแล้ว");
+      const completed = await uploadMissingParts(context, file);
+      setMessage("Resume สำเร็จ กำลังเปิดหน้ารอประมวลผลอัตโนมัติ");
       setUploadPercent(100);
       setActiveUpload(null);
       setFile(null);
       setFileInputKey((value) => value + 1);
-      router.refresh();
+      router.push(`/projects/${projectId}/captures/${completed.capture_id}?mode=track`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Resume ไม่สำเร็จ");
     } finally {
@@ -332,21 +338,36 @@ export function CaptureUploader({ projectId, role, floors, captures, storageStat
         <form className="capture-form" onSubmit={submitCapture}>
           <div className="capture-fields">
             <label className="field"><span>วิดีโอ MP4 แบบ 360 Equirectangular</span><input accept="video/mp4,.mp4" disabled={!canUpload || busy || activeUpload !== null} key={fileInputKey} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setActiveUpload(null); setUploadPercent(0); }} required type="file" /></label>
-            <label className="field"><span>วันที่ถ่าย</span><input disabled={!canUpload || busy} onChange={(event) => setCapturedAt(event.target.value)} required type="datetime-local" value={capturedAt} /></label>
+            <label className="field"><span>วันที่ถ่าย</span><input disabled={!canUpload || busy} max={structuralTrackingEndDate ? `${structuralTrackingEndDate}T23:59` : undefined} onChange={(event) => setCapturedAt(event.target.value)} required type="datetime-local" value={capturedAt} />{structuralTrackingEndDate && <small>งานโครงสร้างสิ้นสุดวันที่ {new Date(`${structuralTrackingEndDate}T00:00:00`).toLocaleDateString("th-TH")}</small>}</label>
             <label className="field"><span>ชุดข้อมูล</span><select disabled={!canUpload || busy} onChange={(event) => setDatasetSplit(event.target.value as "DEVELOPMENT" | "HOLDOUT_TEST")} value={datasetSplit}><option value="DEVELOPMENT">ชุดใช้งานโครงการ</option><option value="HOLDOUT_TEST">ชุดทดสอบความแม่นยำเส้นทาง</option></select></label>
-            <label className="field"><span>ชั้นที่ถ่าย (ห้ามเดินข้ามชั้น)</span><select disabled={!canUpload || busy || !floors.length} onChange={(event) => setFloorId(event.target.value)} required value={floorId}><option value="">เลือกชั้น</option>{floors.map((floor) => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>
+            <label className="field"><span>ชั้นที่ถ่าย (ห้ามเดินข้ามชั้น)</span><select disabled={!canUpload || busy || !floors.length} onChange={(event) => { setFloorId(event.target.value); setPoint(null); }} required value={floorId}><option value="">เลือกชั้น</option>{floors.map((floor) => <option key={floor.id} value={floor.id}>{floor.name}</option>)}</select></label>
             <label className="field"><span>กล้อง/ผู้ถ่าย</span><input disabled={!canUpload || busy} maxLength={200} onChange={(event) => setCamera(event.target.value)} value={camera} /></label>
             <label className="field"><span>หมายเหตุ</span><textarea disabled={!canUpload || busy} maxLength={3000} onChange={(event) => setNotes(event.target.value)} value={notes} /></label>
             <div className="upload-progress"><span>Upload progress</span><strong>{uploadPercent}%</strong><div><i style={{ width: `${uploadPercent}%` }} /></div></div>
             <button className="button button-primary button-block" disabled={!file || !point || !floorId || !canUpload || busy} type="submit">{busy ? `กำลังอัปโหลด ${uploadPercent}%` : activeUpload ? "Retry / Resume Upload" : "สร้าง Capture และอัปโหลด"}</button>
-            <p className="panel-note">ระบบจะดึงภาพทุก 1 วินาที สร้าง Camera Pose และจัดแนวกับ Capture เดิม; ถ้าความมั่นใจต่ำจะให้ตรวจแก้ก่อนแสดงเส้นทาง</p>
+            <p className="panel-note">เมื่ออัปโหลดครบ ระบบจะเปิดหน้ารอให้อัตโนมัติ ดึงภาพทุก 1 วินาที สร้าง Camera Pose และจัดแนวกับ Capture เดิม จากนั้นเข้าสู่หน้า “แปลน | 360° | Progress” พร้อมตรวจทันที; ถ้าความมั่นใจต่ำระบบจะแจ้งให้ตรวจตำแหน่งก่อน</p>
           </div>
           <div>
-            <p className="plan-instruction">คลิกจุดเริ่มต้นบนแบบหนึ่งครั้ง</p>
-            <div className="start-point-plan" onClick={selectStartPoint} role="button" tabIndex={0}>
-              <Image alt="แบบโครงสร้างชั้น 1 สำหรับเลือกจุดเริ่มต้น" fill priority sizes="(max-width: 920px) 100vw, 55vw" src="/plans/floor-1-structural.png" />
-              {point && <span className="selected-start" style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }} />}
-            </div>
+            <p className="plan-instruction">คลิกจุดเริ่มต้นบนแบบ {selectedFloor?.name ?? "ชั้นที่เลือก"} หนึ่งครั้ง</p>
+            {selectedFloor?.has_plan ? (
+              <div className="start-point-plan" onClick={selectStartPoint} role="button" tabIndex={0}>
+                <Image
+                  alt={`แบบ ${selectedFloor.name} สำหรับเลือกจุดเริ่มต้น`}
+                  fill
+                  key={selectedFloor.id}
+                  priority
+                  sizes="(max-width: 920px) 100vw, 55vw"
+                  src={`/api/projects/${projectId}/floors/${selectedFloor.id}/plan`}
+                  unoptimized
+                />
+                {point && <span className="selected-start" style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }} />}
+              </div>
+            ) : (
+              <div className="start-point-plan missing-floor-plan">
+                <strong>{selectedFloor?.name ?? "ชั้นที่เลือก"}</strong>
+                <span>ยังไม่ได้อัปโหลดแปลนของชั้นนี้</span>
+              </div>
+            )}
             <p className="coordinate-readout">{point ? `จุดเริ่มต้น x=${point.x.toFixed(3)}, y=${point.y.toFixed(3)}` : "ยังไม่ได้เลือกจุดเริ่มต้น"}</p>
           </div>
         </form>

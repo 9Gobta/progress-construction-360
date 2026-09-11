@@ -227,6 +227,80 @@ def test_authoritative_visibility_maps_in_between_frames_to_real_warp_stations()
     } == {ids[2]}
 
 
+def test_authoritative_visibility_does_not_jump_across_a_distant_turn() -> None:
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    ids = [uuid.uuid4() for _ in range(8)]
+    points = [(0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (3, 2), (3, 3), (2, 3)]
+    rows = []
+    for index, (frame_id, (x, y)) in enumerate(zip(ids, points, strict=True)):
+        rows.append((
+            SimpleNamespace(
+                id=frame_id,
+                capture_id=uuid.uuid4(),
+                quality_status="USABLE",
+                is_warp_point=True,
+            ),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=Decimal("0"),
+                visual_x=Decimal(x),
+                visual_y=Decimal(y),
+                visual_heading_deg=Decimal("0"),
+                visibility_target_ids=(f'["{ids[-1]}"]' if index == 0 else "[]"),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+            ),
+        ))
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+
+    assert not any(
+        item.from_keyframe_id == ids[0] and item.to_keyframe_id == ids[-1]
+        for item in vectors
+    )
+
+
+def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift() -> None:
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    ids = [uuid.uuid4(), uuid.uuid4()]
+    rows = []
+    for index, frame_id in enumerate(ids):
+        rows.append((
+            SimpleNamespace(
+                id=frame_id,
+                capture_id=uuid.uuid4(),
+                quality_status="USABLE",
+                is_warp_point=True,
+            ),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=Decimal(index),
+                visual_x=Decimal(index),
+                visual_y=Decimal("0"),
+                visual_z=Decimal(index),
+                visual_ground_z=Decimal(index) - Decimal("1.65"),
+                visual_heading_deg=Decimal("0"),
+                orientation_qx=Decimal("0"),
+                orientation_qy=Decimal("0"),
+                orientation_qz=Decimal("0"),
+                orientation_qw=Decimal("1"),
+                visibility_target_ids=(f'["{ids[1]}"]' if index == 0 else "[]"),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+                algorithm="stella-vslam-visual-graph-v4+pycolmap-spatial-v1",
+            ),
+        ))
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+    forward = next(item for item in vectors if item.from_keyframe_id == ids[0])
+
+    assert forward.delta_z == pytest.approx(-1.30)
+
+
 def test_route_vectors_expose_straight_visible_stations_without_crossing_turns() -> None:
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()
@@ -564,6 +638,97 @@ def test_admin_can_delete_capture_and_its_media(
     with testing_session() as db:
         assert db.get(Capture, uuid.UUID(capture["id"])) is None
         assert db.get(MediaFile, uuid.UUID(media["id"])) is None
+
+
+def test_capture_after_structural_end_date_is_rejected(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    project = _create_project(client, auth_headers)
+    project_id = project["id"]
+    floor = client.post(
+        f"/api/v1/projects/{project_id}/floors",
+        headers=auth_headers,
+        json={"name": "ชั้น 1", "level_index": 1},
+    ).json()
+    media = client.post(
+        f"/api/v1/projects/{project_id}/media",
+        headers=auth_headers,
+        json={
+            "original_filename": "architecture-only.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": 10_000_000,
+        },
+    ).json()
+    assert client.patch(
+        f"/api/v1/projects/{project_id}/scope",
+        headers=auth_headers,
+        json={"structural_tracking_end_date": "2026-07-03"},
+    ).status_code == 200
+
+    response = client.post(
+        f"/api/v1/projects/{project_id}/captures",
+        headers=auth_headers,
+        json={
+            "source_video_id": media["id"],
+            "captured_at": "2026-07-04T10:00:00+07:00",
+            "start_floor_id": floor["id"],
+            "start_x": 0.25,
+            "start_y": 0.75,
+        },
+    )
+
+    assert response.status_code == 422
+    assert "สิ้นสุดวันที่ 2026-07-03" in response.json()["detail"]
+
+
+def test_existing_capture_after_structural_end_date_is_hidden(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    project = _create_project(client, auth_headers)
+    project_id = project["id"]
+    floor = client.post(
+        f"/api/v1/projects/{project_id}/floors",
+        headers=auth_headers,
+        json={"name": "ชั้น 1", "level_index": 1},
+    ).json()
+    media = client.post(
+        f"/api/v1/projects/{project_id}/media",
+        headers=auth_headers,
+        json={
+            "original_filename": "existing-architecture.mp4",
+            "content_type": "video/mp4",
+            "size_bytes": 10_000_000,
+        },
+    ).json()
+    capture = client.post(
+        f"/api/v1/projects/{project_id}/captures",
+        headers=auth_headers,
+        json={
+            "source_video_id": media["id"],
+            "captured_at": "2026-07-04T10:00:00+07:00",
+            "start_floor_id": floor["id"],
+            "start_x": 0.25,
+            "start_y": 0.75,
+        },
+    ).json()
+    assert client.patch(
+        f"/api/v1/projects/{project_id}/scope",
+        headers=auth_headers,
+        json={"structural_tracking_end_date": "2026-07-03"},
+    ).status_code == 200
+
+    listed = client.get(
+        f"/api/v1/projects/{project_id}/captures", headers=auth_headers
+    )
+    detail = client.get(
+        f"/api/v1/projects/{project_id}/captures/{capture['id']}",
+        headers=auth_headers,
+    )
+
+    assert listed.status_code == 200
+    assert listed.json() == []
+    assert detail.status_code == 404
+    assert detail.json()["detail"] == "Capture นี้อยู่นอกช่วงติดตามงานโครงสร้าง"
 
 
 def test_studio_exported_mp4_can_recover_an_insv_capture(
@@ -950,6 +1115,16 @@ def test_capture_detail_returns_pose_and_reviewer_can_move_it(
     assert detail_body["path_points"][0]["y"] == "0.600000"
     assert detail_body["path_points"][0]["floor_id"] == floor_2["id"]
     assert detail_body["path_points"][0]["algorithm"].endswith("+anchor-correction")
+
+    confirmed = client.post(
+        f"/api/v1/projects/{project_id}/captures/{capture['id']}/poses/confirm",
+        headers=auth_headers,
+        params={"floor_id": floor_2["id"]},
+    )
+    assert confirmed.status_code == 200
+    assert len(confirmed.json()) == 1
+    assert confirmed.json()[0]["reviewed_at"] is not None
+    assert confirmed.json()[0]["algorithm"].endswith("+human-confirmed")
 
     calibrated = client.post(
         f"/api/v1/projects/{project_id}/captures/{capture['id']}/path-calibration",
@@ -1839,3 +2014,84 @@ def test_beam_progress_is_stored_per_capture_and_keeps_latest_value(
     ).json()
     values = {item["code"]: float(item["progress_percent"]) for item in latest["items"]}
     assert values == {"F1-B-1-2": 100, "F1-B-2-3": 75}
+
+
+def test_upper_floor_beam_stages_carry_forward_across_capture_dates(
+    client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
+    project = _create_project(client, auth_headers)
+    project_id = project["id"]
+    floor = client.post(
+        f"/api/v1/projects/{project_id}/floors",
+        headers=auth_headers,
+        json={"name": "ชั้น 2", "level_index": 2},
+    ).json()
+
+    captures = []
+    for day in (25, 29):
+        media = client.post(
+            f"/api/v1/projects/{project_id}/media",
+            headers=auth_headers,
+            json={
+                "original_filename": f"beam-progress-2026-01-{day}.mp4",
+                "content_type": "video/mp4",
+                "size_bytes": 1024,
+            },
+        ).json()
+        captures.append(client.post(
+            f"/api/v1/projects/{project_id}/captures",
+            headers=auth_headers,
+            json={
+                "source_video_id": media["id"],
+                "captured_at": f"2026-01-{day:02d}T10:00:00+07:00",
+                "start_floor_id": floor["id"],
+                "start_x": 0.2,
+                "start_y": 0.4,
+            },
+        ).json())
+
+    segment = client.put(
+        f"/api/v1/projects/{project_id}/floors/{floor['id']}/beam-segments",
+        headers=auth_headers,
+        json={
+            "sheet_name": "ST-04",
+            "segments": [{
+                "code": "L2-B-1",
+                "beam_type": "B1",
+                "start_x": 0.2,
+                "start_y": 0.4,
+                "end_x": 0.4,
+                "end_y": 0.4,
+                "length_m": 3.75,
+            }],
+        },
+    ).json()[0]
+
+    def save(capture_id: str, stages: list[str]):
+        return client.put(
+            f"/api/v1/projects/{project_id}/captures/{capture_id}/beam-progress",
+            headers=auth_headers,
+            json={
+                "floor_id": floor["id"],
+                "entries": [{
+                    "beam_segment_id": segment["id"],
+                    "completed_stages": stages,
+                }],
+            },
+        )
+
+    assert save(captures[0]["id"], ["SHORING"]).status_code == 200
+    later = save(captures[1]["id"], ["REBAR"])
+    assert later.status_code == 200
+    item = later.json()["items"][0]
+    assert item["completed_stages"] == ["SHORING", "REBAR"]
+    assert float(item["progress_percent"]) == pytest.approx(40)
+
+    carried = client.get(
+        f"/api/v1/projects/{project_id}/captures/{captures[1]['id']}/beam-progress",
+        headers=auth_headers,
+        params={"floor_id": floor["id"]},
+    )
+    assert carried.status_code == 200
+    assert carried.json()["items"][0]["completed_stages"] == ["SHORING", "REBAR"]

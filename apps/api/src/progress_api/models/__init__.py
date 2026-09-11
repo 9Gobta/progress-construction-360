@@ -1,3 +1,4 @@
+from progress_api.models.bim import BimViewpoint
 from progress_api.models.capture import (
     CameraPose,
     Capture,
@@ -11,6 +12,7 @@ from progress_api.models.capture import (
     ProcessingJob,
     VideoMetadata,
 )
+from progress_api.models.field_note import FieldNote, FieldNoteAttachment, FieldNoteComment
 from progress_api.models.identity import ProjectMember, User
 from progress_api.models.progress import (
     BeamProgressEntry,
@@ -30,12 +32,16 @@ __all__ = [
     "BeamSegment",
     "BeamProgressEntry",
     "BeamProgressPrediction",
+    "BimViewpoint",
     "CameraPose",
     "Capture",
     "CaptureDatasetDate",
     "CapturePathPoint",
     "Floor",
     "FloorWorkItem",
+    "FieldNote",
+    "FieldNoteAttachment",
+    "FieldNoteComment",
     "GridAxis",
     "HumanProgressEntry",
     "Keyframe",

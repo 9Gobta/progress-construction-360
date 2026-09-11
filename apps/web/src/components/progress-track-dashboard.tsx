@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import type { Activity, Capture, Floor, HumanProgressEntry } from "@/lib/types";
+import { bangkokDateKey, latestProgressAt, timestamp } from "@/lib/dashboard-progress";
+import type { Activity, Capture, Floor, HumanProgressEntry, ProgressComparison, StructuralElement } from "@/lib/types";
 
 type DashboardTab = "overview" | "details" | "productivity";
 type DetailFilter = "all" | "not-started" | "in-progress" | "complete" | "behind";
@@ -11,33 +13,31 @@ type DetailFilter = "all" | "not-started" | "in-progress" | "complete" | "behind
 type Props = {
   activities: Activity[];
   captures: Capture[];
+  comparison: ProgressComparison | null;
   floors: Floor[];
   initialCaptureId: string | null;
   progress: HumanProgressEntry[];
   projectId: string;
+  structuralElements: StructuralElement[];
 };
 
-const floorGroups = [
-  { key: "1.2.1", label: "ชั้น 1", levelIndex: 1 },
-  { key: "1.2.2", label: "ชั้น 2", levelIndex: 2 },
-  { key: "1.2.3", label: "ชั้น 3", levelIndex: 3 },
-  { key: "1.2.4", label: "ชั้น 4", levelIndex: 4 },
-  { key: "1.2.5", label: "ชั้นหลังคา", levelIndex: 5 },
-  { key: "1.2.6", label: "ดาดฟ้า", levelIndex: 6 },
-] as const;
-
 const workGroups = [
-  { key: "foundation", label: "ฐานราก/ตอม่อ", test: (name: string) => /ฐานราก|ตอม่อ|ขุดดิน|ถมดิน/.test(name) },
-  { key: "beam", label: "คาน", test: (name: string) => /คาน/.test(name) },
-  { key: "slab", label: "พื้น", test: (name: string) => /พื้น|Topping/.test(name) },
-  { key: "column", label: "เสา", test: (name: string) => /เสา/.test(name) && !/ตอม่อ/.test(name) },
-  { key: "stair", label: "บันได", test: (name: string) => /บันได/.test(name) },
-  { key: "roof", label: "หลังคา", test: (name: string) => /หลังคา/.test(name) },
+  {
+    key: "foundation",
+    label: "ฐานราก/ตอม่อ",
+    // Ground-slab soil compaction contains words such as "บดอัด" and
+    // "ปรับระดับ", but belongs to floor work (1.2.1.4), not foundations.
+    test: (activity: Activity) => activity.wbs.startsWith("1.2.1.1.") || activity.wbs.startsWith("1.2.1.2."),
+  },
+  { key: "beam", label: "คาน", test: (activity: Activity) => /คาน/.test(activity.name) && !/หลังคา|ดาดฟ้า/.test(activity.name) },
+  { key: "slab", label: "พื้น", test: (activity: Activity) => /พื้น|Topping/.test(activity.name) && !/หลังคา|ดาดฟ้า/.test(activity.name) },
+  { key: "column", label: "เสา", test: (activity: Activity) => /เสา/.test(activity.name) && !/ตอม่อ|หลังคา|ดาดฟ้า/.test(activity.name) },
+  { key: "stair", label: "บันได", test: (activity: Activity) => /บันได/.test(activity.name) && !/หลังคา|ดาดฟ้า/.test(activity.name) },
+  { key: "roof", label: "หลังคา/ดาดฟ้า", test: (activity: Activity) => /หลังคา|ดาดฟ้า/.test(activity.name) },
 ] as const;
 
 function time(value: string) {
-  const result = new Date(value).getTime();
-  return Number.isFinite(result) ? result : 0;
+  return timestamp(value);
 }
 
 function formatDate(value: string) {
@@ -85,35 +85,58 @@ function csvCell(value: string | number) {
 type MatrixCell = {
   key: string;
   label: string;
-  rows: Array<unknown>;
+  rows: Array<{
+    activity: Activity;
+    entry: HumanProgressEntry | null;
+    actual: number | null;
+    planned: number;
+    status: Exclude<DetailFilter, "all">;
+  }>;
   reviewed: number;
   percent: number | null;
   status: Exclude<DetailFilter, "all"> | null;
 };
 
-function ProgressMatrixCell({ breakdown, cell, onOpen }: { breakdown: "status" | "percent" | "quantity"; cell: MatrixCell; onOpen: () => void }) {
+function roofActivityLabel(activity: Activity) {
+  return activity.name
+    .replace(/^งาน\s*/, "")
+    .replace(/\s*(?:ชั้น)?หลังคา\s*$/, "")
+    .trim();
+}
+
+function ProgressMatrixCell({ breakdown, cell, onOpen, showRows = false }: { breakdown: "status" | "percent" | "quantity"; cell: MatrixCell; onOpen: () => void; showRows?: boolean }) {
   if (!cell.rows.length) return <span className="track-cell-empty">—</span>;
   const percent = cell.percent ?? 0;
-  return <button className={`openspace-progress-cell is-${cell.status}`} onClick={onOpen} type="button">
+  return <button className={`openspace-progress-cell is-${cell.status}${showRows ? " has-breakdown" : ""}`} onClick={onOpen} type="button">
     {breakdown === "status" && <span className={`track-status is-${cell.status}`}>{cell.status ? statusText[cell.status] : "—"}</span>}
     {breakdown === "percent" && <><span className="cell-progress-bar"><i style={{ width: `${percent}%` }} /></span><strong>{percent.toFixed(0)}%</strong></>}
     {breakdown === "quantity" && <><strong>{cell.reviewed} / {cell.rows.length}</strong><small>รายการที่ตรวจแล้ว</small></>}
+    {showRows && <span className="roof-progress-breakdown" aria-label="รายการงานของแปลนหลังคานี้">
+      {cell.rows.map((row) => <span key={row.activity.id}>
+        <em>{roofActivityLabel(row.activity)}</em>
+        <b className={row.actual === null ? "is-unreviewed" : ""}>{row.actual === null ? "ยังไม่ตรวจ" : `${row.actual.toFixed(0)}%`}</b>
+      </span>)}
+    </span>}
   </button>;
 }
 
-export function ProgressTrackDashboard({ activities, captures, floors, initialCaptureId, progress, projectId }: Props) {
+export function ProgressTrackDashboard({ activities, captures, comparison, floors, initialCaptureId, progress, projectId, structuralElements }: Props) {
+  const router = useRouter();
   const [tab, setTab] = useState<DashboardTab>("overview");
   const [breakdown, setBreakdown] = useState<"status" | "percent" | "quantity">("percent");
   const [captureId, setCaptureId] = useState(initialCaptureId ?? captures[0]?.id ?? "");
   const [filter, setFilter] = useState<DetailFilter>("all");
   const [query, setQuery] = useState("");
+  const [activityScope, setActivityScope] = useState<string[] | null>(null);
   const captureDates = useMemo(() => {
     const unique = new Map<string, Capture>();
     for (const capture of captures) {
-      const key = new Date(capture.captured_at).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+      const key = bangkokDateKey(capture.captured_at);
       if (!unique.has(key) || capture.id === captureId) unique.set(key, capture);
     }
-    return [...unique.values()];
+    return [...unique.values()].sort((first, second) => (
+      time(second.captured_at) - time(first.captured_at)
+    ));
   }, [captureId, captures]);
 
   const measurable = useMemo(
@@ -121,52 +144,82 @@ export function ProgressTrackDashboard({ activities, captures, floors, initialCa
     [activities],
   );
   const selectedCapture = captures.find((item) => item.id === captureId) ?? captures[0] ?? null;
+  const selectedDateIndex = captureDates.findIndex((item) => item.id === selectedCapture?.id);
+  const newerCapture = selectedDateIndex > 0 ? captureDates[selectedDateIndex - 1] : null;
+  const olderCapture = selectedDateIndex >= 0 && selectedDateIndex < captureDates.length - 1
+    ? captureDates[selectedDateIndex + 1]
+    : null;
   const snapshotTime = selectedCapture ? time(selectedCapture.captured_at) : 0;
 
   const snapshot = useMemo(() => {
-    const latest = new Map<string, HumanProgressEntry>();
-    for (const entry of progress) {
-      if (time(entry.observed_at) <= snapshotTime && !latest.has(entry.activity_id)) latest.set(entry.activity_id, entry);
-    }
+    const comparisonByActivity = new Map(
+      comparison?.items.map((item) => [item.activity_id, item]) ?? [],
+    );
+    const currentIds = new Set(measurable.map((activity) => activity.id));
+    const currentIdByWbs = new Map(measurable.map((activity) => [activity.wbs, activity.id]));
+    const latest = latestProgressAt(progress, snapshotTime, (entry) => (
+      currentIds.has(entry.activity_id)
+        ? entry.activity_id
+        : entry.activity_wbs ? currentIdByWbs.get(entry.activity_wbs) : undefined
+    ));
     return measurable.map((activity) => {
       const entry = latest.get(activity.id) ?? null;
-      const actual = entry ? Number(entry.progress_percent) : null;
+      const comparedActual = comparisonByActivity.get(activity.id)?.human_actual_percent;
+      const actual = comparedActual !== null && comparedActual !== undefined
+        ? Number(comparedActual)
+        : entry ? Number(entry.progress_percent) : null;
       const planned = plannedPercent(activity, snapshotTime);
       return { activity, entry, actual, planned, status: statusOf(actual, planned) };
     });
-  }, [measurable, progress, snapshotTime]);
+  }, [comparison, measurable, progress, snapshotTime]);
 
   const totals = useMemo(() => {
     const actualValues = snapshot.map((row) => row.actual ?? 0);
     return {
       actual: actualValues.length ? actualValues.reduce((sum, value) => sum + value, 0) / actualValues.length : 0,
       planned: snapshot.length ? snapshot.reduce((sum, row) => sum + row.planned, 0) / snapshot.length : 0,
-      reviewed: snapshot.filter((row) => row.entry).length,
+      reviewed: snapshot.filter((row) => row.actual !== null).length,
       complete: snapshot.filter((row) => row.status === "complete").length,
       behind: snapshot.filter((row) => (row.actual ?? 0) + 20 < row.planned).length,
     };
   }, [snapshot]);
 
-  const matrix = useMemo(() => floorGroups.map((floorGroup) => {
-    const floor = floors.find((item) => item.level_index === floorGroup.levelIndex) ?? null;
+  const matrix = useMemo(() => floors
+    .slice()
+    .sort((first, second) => first.level_index - second.level_index)
+    .map((floor) => {
+    const roofActivityWbs = new Set(structuralElements
+      .filter((element) => element.floor_id === floor.id && element.element_kind === "ROOF")
+      .map((element) => element.geometry_json.activity_wbs)
+      .filter((wbs): wbs is string => Boolean(wbs)));
+    const isRoofPlan = roofActivityWbs.size > 0 || /หลังคา|ดาดฟ้า/.test(floor.name);
+    const floorRows = snapshot.filter((row) => isRoofPlan
+      ? roofActivityWbs.has(row.activity.wbs)
+      : row.activity.wbs.startsWith(`1.2.${floor.level_index}.`));
     const floorCaptures = captures.filter((item) => item.start_floor_id === floor?.id && time(item.captured_at) <= snapshotTime);
-    const lastCapture = floorCaptures.sort((a, b) => time(b.captured_at) - time(a.captured_at))[0] ?? null;
+    const lastCapture = floorCaptures.sort((a, b) => time(b.captured_at) - time(a.captured_at))[0]
+      ?? (isRoofPlan ? selectedCapture : null);
     return {
-    ...floorGroup,
+    key: floor.id,
+    label: floor.name,
+    levelIndex: floor.level_index,
+    isRoofPlan,
     floor,
     lastCapture,
     cells: workGroups.map((work) => {
-      const rows = snapshot.filter((row) => row.activity.wbs.startsWith(`${floorGroup.key}.`) && work.test(row.activity.name));
-      const reviewed = rows.filter((row) => row.entry).length;
+      const rows = isRoofPlan
+        ? work.key === "roof" ? floorRows : []
+        : floorRows.filter((row) => work.test(row.activity));
+      const reviewed = rows.filter((row) => row.actual !== null).length;
       const percent = rows.length ? rows.reduce((sum, row) => sum + (row.actual ?? 0), 0) / rows.length : null;
       const planned = rows.length ? rows.reduce((sum, row) => sum + row.planned, 0) / rows.length : 0;
       return { ...work, rows, reviewed, percent, status: rows.length ? statusOf(percent, planned) : null };
     }),
-  }}).filter((floor) => floor.cells.some((cell) => cell.rows.length)), [captures, floors, snapshot, snapshotTime]);
+  }}).filter((floor) => floor.cells.some((cell) => cell.rows.length)), [captures, floors, selectedCapture, snapshot, snapshotTime, structuralElements]);
 
   const projectCells = useMemo(() => workGroups.map((work) => {
-    const rows = snapshot.filter((row) => work.test(row.activity.name));
-    const reviewed = rows.filter((row) => row.entry).length;
+    const rows = snapshot.filter((row) => work.test(row.activity));
+    const reviewed = rows.filter((row) => row.actual !== null).length;
     const percent = rows.length ? rows.reduce((sum, row) => sum + (row.actual ?? 0), 0) / rows.length : null;
     const planned = rows.length ? rows.reduce((sum, row) => sum + row.planned, 0) / rows.length : 0;
     return { ...work, rows, reviewed, percent, status: rows.length ? statusOf(percent, planned) : null };
@@ -175,25 +228,38 @@ export function ProgressTrackDashboard({ activities, captures, floors, initialCa
   const visibleRows = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("th-TH");
     return snapshot.filter((row) => {
+      if (activityScope && !activityScope.includes(row.activity.id)) return false;
       if (filter !== "all" && row.status !== filter) return false;
       if (!normalized) return true;
       const haystack = `${row.activity.wbs} ${row.activity.name}`.toLocaleLowerCase("th-TH");
       const terms = normalized.includes("/") ? normalized.split("/").map((term) => term.trim()).filter(Boolean) : [normalized];
       return terms.some((term) => haystack.includes(term));
     });
-  }, [filter, query, snapshot]);
+  }, [activityScope, filter, query, snapshot]);
 
   const chart = useMemo(() => {
     const dateKeys = [...new Set([
-      ...captures.map((item) => new Date(item.captured_at).toISOString().slice(0, 10)),
-      ...progress.map((item) => new Date(item.observed_at).toISOString().slice(0, 10)),
+      ...captures.map((item) => bangkokDateKey(item.captured_at)),
+      ...progress.map((item) => bangkokDateKey(item.observed_at)),
     ])].sort();
+    const currentIds = new Set(measurable.map((activity) => activity.id));
+    const currentIdByWbs = new Map(measurable.map((activity) => [activity.wbs, activity.id]));
+    const selectedComparison = new Map(
+      comparison?.items.map((item) => [item.activity_id, item.human_actual_percent]) ?? [],
+    );
+    const selectedDateKey = selectedCapture ? bangkokDateKey(selectedCapture.captured_at) : null;
     const points = dateKeys.map((key) => {
       const at = time(`${key}T23:59:59+07:00`);
-      const latest = new Map<string, HumanProgressEntry>();
-      for (const entry of progress) if (time(entry.observed_at) <= at && !latest.has(entry.activity_id)) latest.set(entry.activity_id, entry);
+      const latest = latestProgressAt(progress, at, (entry) => (
+        currentIds.has(entry.activity_id)
+          ? entry.activity_id
+          : entry.activity_wbs ? currentIdByWbs.get(entry.activity_wbs) : undefined
+      ));
       const actual = measurable.length
-        ? measurable.reduce((sum, item) => sum + Number(latest.get(item.id)?.progress_percent ?? 0), 0) / measurable.length
+        ? measurable.reduce((sum, item) => {
+          const compared = key === selectedDateKey ? selectedComparison.get(item.id) : null;
+          return sum + Number(compared ?? latest.get(item.id)?.progress_percent ?? 0);
+        }, 0) / measurable.length
         : 0;
       const planned = measurable.length
         ? measurable.reduce((sum, item) => sum + plannedPercent(item, at), 0) / measurable.length
@@ -213,7 +279,7 @@ export function ProgressTrackDashboard({ activities, captures, floors, initialCa
       x,
       y,
     };
-  }, [captures, measurable, progress]);
+  }, [captures, comparison, measurable, progress, selectedCapture]);
 
   function downloadCsv() {
     const header = ["WBS", "งานโครงสร้าง", "แผน (%)", "ผลจริง (%)", "สถานะ", "วันที่ตรวจ", "หมายเหตุ"];
@@ -235,16 +301,21 @@ export function ProgressTrackDashboard({ activities, captures, floors, initialCa
     URL.revokeObjectURL(url);
   }
 
+  function openCaptureDate(nextCaptureId: string) {
+    setCaptureId(nextCaptureId);
+    router.push(`/projects/${projectId}/dashboard?captureId=${encodeURIComponent(nextCaptureId)}`);
+  }
+
   if (!selectedCapture) return <div className="empty-state"><strong>ยังไม่มี Capture</strong><p>อัปโหลด Capture ก่อนเปิด Dashboard</p></div>;
 
   return <div className="track-dashboard">
     <div className="track-toolbar">
       <nav aria-label="มุมมอง Progress">
         <button className={tab === "overview" ? "is-active" : ""} onClick={() => setTab("overview")} type="button">ภาพรวม</button>
-        <button className={tab === "details" ? "is-active" : ""} onClick={() => setTab("details")} type="button">รายละเอียดบนแผนงาน</button>
+        <button className={tab === "details" ? "is-active" : ""} onClick={() => { setActivityScope(null); setQuery(""); setTab("details"); }} type="button">รายละเอียดบนแผนงาน</button>
         <button className={tab === "productivity" ? "is-active" : ""} onClick={() => setTab("productivity")} type="button">Productivity</button>
       </nav>
-      <div><label>Progress ณ วันที่<select onChange={(event) => setCaptureId(event.target.value)} value={selectedCapture.id}>{captureDates.map((item) => <option key={item.id} value={item.id}>{new Date(item.captured_at).toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" })}</option>)}</select></label><button className="button button-secondary" onClick={downloadCsv} type="button">ส่งออก CSV</button></div>
+      <div><div className="dashboard-date-field"><span>Progress ณ วันที่</span><span className="dashboard-date-stepper">{olderCapture ? <Link aria-label="ดู Progress วันก่อนหน้า" href={`/projects/${projectId}/dashboard?captureId=${encodeURIComponent(olderCapture.id)}`} title={formatDate(olderCapture.captured_at)}>←</Link> : <button aria-label="ดู Progress วันก่อนหน้า" disabled title="ไม่มีวันก่อนหน้า" type="button">←</button>}<select aria-label="เลือกวันที่ Progress" onChange={(event) => openCaptureDate(event.target.value)} value={selectedCapture.id}>{captureDates.map((item) => <option key={item.id} value={item.id}>{new Date(item.captured_at).toLocaleDateString("th-TH", { day: "2-digit", month: "long", year: "numeric" })}</option>)}</select>{newerCapture ? <Link aria-label="ดู Progress วันถัดไป" href={`/projects/${projectId}/dashboard?captureId=${encodeURIComponent(newerCapture.id)}`} title={formatDate(newerCapture.captured_at)}>→</Link> : <button aria-label="ดู Progress วันถัดไป" disabled title="ไม่มีวันถัดไป" type="button">→</button>}</span></div><button className="button button-secondary" onClick={downloadCsv} type="button">ส่งออก CSV</button></div>
     </div>
 
     <section className="track-kpis">
@@ -257,8 +328,8 @@ export function ProgressTrackDashboard({ activities, captures, floors, initialCa
     {tab === "overview" && <section className="panel track-overview openspace-overview">
       <div className="openspace-breakdown"><span>แสดงผลตาม</span><div><button className={breakdown === "status" ? "is-active" : ""} onClick={() => setBreakdown("status")} type="button">สถานะ</button><button className={breakdown === "percent" ? "is-active" : ""} onClick={() => setBreakdown("percent")} type="button">% สำเร็จ</button><button className={breakdown === "quantity" ? "is-active" : ""} onClick={() => setBreakdown("quantity")} type="button">ปริมาณ</button></div><small>ผลล่าสุดถึง {formatDate(selectedCapture.captured_at)}</small></div>
       <div className="track-matrix-wrap"><table className="track-matrix openspace-matrix"><thead><tr><th>ชั้น / พื้นที่</th><th>Capture ล่าสุด</th><th>สถานะการตรวจ</th>{workGroups.map((work) => <th key={work.key}>{work.label}</th>)}</tr></thead><tbody>
-        <tr className="project-total-row"><th>ทั้งโครงการ</th><td>{formatDate(selectedCapture.captured_at)}</td><td><span className="tracking-summary">เสร็จ {totals.complete}<br />กำลังทำ {snapshot.filter((row) => row.status === "in-progress").length}<br />ยังไม่เริ่ม {snapshot.filter((row) => row.status === "not-started").length}</span></td>{projectCells.map((cell) => <td key={cell.key}><ProgressMatrixCell breakdown={breakdown} cell={cell} onOpen={() => { setQuery(cell.label); setFilter("all"); setTab("details"); }} /></td>)}</tr>
-        {matrix.map((floor) => <tr key={floor.key}><th>{floor.lastCapture ? <Link href={`/projects/${projectId}/captures/${floor.lastCapture.id}?mode=track&floorId=${floor.floor?.id ?? ""}`}>{floor.label}<small>เปิด Sheet View</small></Link> : floor.label}</th><td>{floor.lastCapture ? formatDate(floor.lastCapture.captured_at) : "—"}</td><td><span className={`track-status is-${statusOf(floor.cells.some((cell) => (cell.percent ?? 0) > 0) ? 1 : 0, 0)}`}>{floor.cells.every((cell) => !cell.rows.length || (cell.percent ?? 0) >= 100) ? "เสร็จแล้ว" : floor.cells.some((cell) => (cell.percent ?? 0) > 0) ? "กำลังทำ" : "ยังไม่เริ่ม"}</span></td>{floor.cells.map((cell) => <td key={cell.key}><ProgressMatrixCell breakdown={breakdown} cell={cell} onOpen={() => { setQuery(cell.label); setFilter("all"); setTab("details"); }} /></td>)}</tr>)}
+        <tr className="project-total-row"><th>ทั้งโครงการ</th><td>{formatDate(selectedCapture.captured_at)}</td><td><span className="tracking-summary">เสร็จ {totals.complete}<br />กำลังทำ {snapshot.filter((row) => row.status === "in-progress").length}<br />ยังไม่เริ่ม {snapshot.filter((row) => row.status === "not-started").length}</span></td>{projectCells.map((cell) => <td key={cell.key}><ProgressMatrixCell breakdown={breakdown} cell={cell} onOpen={() => { setActivityScope(cell.rows.map((row) => row.activity.id)); setQuery(""); setFilter("all"); setTab("details"); }} /></td>)}</tr>
+        {matrix.map((floor) => <tr className={floor.isRoofPlan ? "is-roof-plan-row" : undefined} key={floor.key}><th>{floor.lastCapture ? <Link href={`/projects/${projectId}/captures/${floor.lastCapture.id}?mode=track&floorId=${floor.floor?.id ?? ""}`}>{floor.label}<small>เปิด Sheet View</small></Link> : floor.label}</th><td>{floor.lastCapture ? formatDate(floor.lastCapture.captured_at) : "—"}</td><td><span className={`track-status is-${statusOf(floor.cells.some((cell) => (cell.percent ?? 0) > 0) ? 1 : 0, 0)}`}>{floor.cells.every((cell) => !cell.rows.length || (cell.percent ?? 0) >= 100) ? "เสร็จแล้ว" : floor.cells.some((cell) => (cell.percent ?? 0) > 0) ? "กำลังทำ" : "ยังไม่เริ่ม"}</span></td>{floor.cells.map((cell) => <td key={cell.key}><ProgressMatrixCell breakdown={breakdown} cell={cell} showRows={floor.isRoofPlan && cell.key === "roof"} onOpen={() => { setActivityScope(cell.rows.map((row) => row.activity.id)); setQuery(""); setFilter("all"); setTab("details"); }} /></td>)}</tr>)}
       </tbody></table></div>
     </section>}
 

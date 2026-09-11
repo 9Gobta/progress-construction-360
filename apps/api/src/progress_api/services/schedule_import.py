@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -23,6 +23,7 @@ DATETIME_FORMATS = (
     "%Y-%m-%d",
 )
 EMPTY_MARKERS = {"", "NA", "N/A", "NONE", "NULL", "-"}
+UPPER_FLOOR_SHORING_GROUPS = {"1": "คาน", "2": "พื้น", "4": "บันได"}
 
 
 class ScheduleImportError(ValueError):
@@ -67,6 +68,47 @@ def parse_datetime(value: Any, *, column: str, row_no: int) -> datetime:
 def parent_wbs(wbs: str) -> str | None:
     parent, separator, _ = wbs.rpartition(".")
     return parent if separator else None
+
+
+def add_upper_floor_shoring_activities(
+    rows: tuple[ImportedActivity, ...],
+) -> tuple[tuple[ImportedActivity, ...], bool]:
+    """Add the reviewed shoring step missing from upper-floor schedule files."""
+    result = list(rows)
+    changed = False
+    for level in (2, 3, 4):
+        for group_suffix, group_label in UPPER_FLOOR_SHORING_GROUPS.items():
+            group_wbs = f"1.2.{level}.{group_suffix}"
+            direct = [
+                (index, row)
+                for index, row in enumerate(result)
+                if row.parent_wbs == group_wbs and not row.is_summary
+            ]
+            if not direct or any("ค้ำยัน" in row.name for _index, row in direct):
+                continue
+            shifted_wbs = {
+                row.wbs: f"{group_wbs}.{int(row.wbs.rsplit('.', 1)[1]) + 1}"
+                for _index, row in direct
+                if row.wbs.rsplit(".", 1)[1].isdigit()
+            }
+            if len(shifted_wbs) != len(direct):
+                continue
+            result = [
+                replace(row, wbs=shifted_wbs.get(row.wbs, row.wbs))
+                for row in result
+            ]
+            first_index, first = direct[0]
+            result.insert(first_index, ImportedActivity(
+                source_row_no=first.source_row_no,
+                name=f"งานค้ำยัน{group_label}ชั้น {level}",
+                wbs=f"{group_wbs}.1",
+                parent_wbs=group_wbs,
+                planned_start=first.planned_start,
+                planned_finish=first.planned_finish,
+                is_summary=False,
+            ))
+            changed = True
+    return tuple(result), changed
 
 
 def load_schedule_workbook(path: str | Path | bytes | BinaryIO) -> ScheduleImportResult:
@@ -134,9 +176,14 @@ def load_schedule_workbook(path: str | Path | bytes | BinaryIO) -> ScheduleImpor
                 "Percent_Complete was ignored; Human Actual must be entered "
                 "and audited in the Web app."
             )
+        normalized_rows, added_shoring = add_upper_floor_shoring_activities(tuple(imported))
+        if added_shoring:
+            warnings.append(
+                "เพิ่มขั้นงานค้ำยันสำหรับคาน พื้น และบันไดชั้น 2–4 ตามรูปแบบตรวจของโครงการ"
+            )
         return ScheduleImportResult(
             sheet_name=worksheet.title,
-            rows=tuple(imported),
+            rows=normalized_rows,
             used_baseline_dates=used_baseline_for_any_row,
             warnings=tuple(warnings),
         )

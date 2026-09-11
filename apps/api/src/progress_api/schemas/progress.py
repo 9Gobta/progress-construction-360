@@ -4,9 +4,23 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-BEAM_STAGE_CODES = {"SETTING_OUT", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM"}
+BEAM_STAGE_CODES = {"SETTING_OUT", "SHORING", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM"}
 COLUMN_STAGE_CODES = {"REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM"}
-SLAB_STAGE_CODES = {"STEP_1", "STEP_2", "STEP_3", "STEP_4", "STEP_5"}
+STAIR_STAGE_CODES = {"SHORING", "REBAR", "FORMWORK", "CONCRETE", "STRIP_FORM"}
+SLAB_STAGE_CODES = {
+    "STEP_1",
+    "STEP_2",
+    "STEP_3",
+    "STEP_4",
+    "STEP_5",
+    "SHORING",
+    "PLACE_PRECAST",
+    "SOIL_COMPACTION",
+    "REBAR",
+    "FORMWORK",
+    "CONCRETE",
+    "STRIP_FORM",
+}
 
 
 class HumanProgressCreate(BaseModel):
@@ -22,6 +36,10 @@ class HumanProgressCreate(BaseModel):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("observed_at must include a timezone")
         return value
+
+
+class HumanProgressBulkCreate(BaseModel):
+    entries: list[HumanProgressCreate] = Field(min_length=1, max_length=200)
 
 
 class HumanProgressRead(BaseModel):
@@ -195,6 +213,48 @@ class ColumnProgressRead(BaseModel):
     items: list[ColumnProgressItem]
 
 
+class StairProgressValue(BaseModel):
+    structural_element_id: uuid.UUID
+    completed_stages: list[str] = Field(default_factory=list)
+    evidence_keyframe_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("completed_stages")
+    @classmethod
+    def stages_must_be_known_and_unique(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)) or not set(value).issubset(STAIR_STAGE_CODES):
+            raise ValueError("completed_stages contains an unknown or duplicate stage")
+        return value
+
+
+class StairProgressBulkCreate(BaseModel):
+    floor_id: uuid.UUID
+    entries: list[StairProgressValue] = Field(min_length=1, max_length=200)
+
+
+class StairProgressItem(BaseModel):
+    structural_element_id: uuid.UUID
+    code: str
+    geometry_json: dict[str, object]
+    progress_percent: Decimal | None
+    completed_stages: list[str] = Field(default_factory=list)
+    evidence_keyframe_id: uuid.UUID | None
+    note: str | None
+    entered_by_id: uuid.UUID | None
+    created_at: datetime | None
+
+
+class StairProgressRead(BaseModel):
+    project_id: uuid.UUID
+    capture_id: uuid.UUID
+    floor_id: uuid.UUID
+    labeled_count: int
+    stair_count: int
+    progress_percent: Decimal
+    stage_summaries: list[ColumnStageSummary] = Field(default_factory=list)
+    items: list[StairProgressItem]
+
+
 class SlabProgressValue(BaseModel):
     structural_element_id: uuid.UUID
     completed_stages: list[str] = Field(default_factory=list)
@@ -244,6 +304,57 @@ class SlabProgressRead(BaseModel):
     progress_percent: Decimal
     stage_summaries: list[SlabStageSummary] = Field(default_factory=list)
     items: list[SlabProgressItem]
+
+
+class RoofProgressValue(BaseModel):
+    structural_element_id: uuid.UUID
+    complete: bool | None = None
+    completed_quantity: int | None = Field(default=None, ge=0, le=1000000)
+    total_quantity: int | None = Field(default=None, gt=0, le=1000000)
+    evidence_keyframe_id: uuid.UUID | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def completion_value_is_required(self) -> "RoofProgressValue":
+        if self.complete is None and self.completed_quantity is None:
+            raise ValueError("complete or completed_quantity is required")
+        return self
+
+
+class RoofProgressBulkCreate(BaseModel):
+    floor_id: uuid.UUID
+    entries: list[RoofProgressValue] = Field(min_length=1, max_length=200)
+
+
+class RoofProgressBulkDelete(BaseModel):
+    floor_id: uuid.UUID
+    structural_element_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class RoofProgressItem(BaseModel):
+    structural_element_id: uuid.UUID
+    code: str
+    activity_wbs: str
+    geometry_json: dict[str, object]
+    progress_percent: Decimal | None
+    complete: bool
+    completed_quantity: int | None = None
+    total_quantity: int | None = None
+    capture_id: uuid.UUID | None = None
+    evidence_keyframe_id: uuid.UUID | None
+    note: str | None
+    entered_by_id: uuid.UUID | None
+    created_at: datetime | None
+
+
+class RoofProgressRead(BaseModel):
+    project_id: uuid.UUID
+    capture_id: uuid.UUID
+    floor_id: uuid.UUID
+    labeled_count: int
+    element_count: int
+    progress_percent: Decimal
+    items: list[RoofProgressItem]
 
 
 class BeamAICaptureEvaluation(BaseModel):

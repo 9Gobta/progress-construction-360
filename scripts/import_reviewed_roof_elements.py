@@ -56,6 +56,23 @@ def line(code: str, activity: str, start: tuple[float, float], end: tuple[float,
     }
 
 
+def quantity_group(
+    code: str,
+    activity: str,
+    segments: list[tuple[tuple[float, float], tuple[float, float]]],
+):
+    """Group parallel members that inspectors count as one work set."""
+    return {
+        "code": code,
+        "activity_wbs": ROOF_ACTIVITY_WBS[activity],
+        "geometry": {
+            "lines": [[list(start), list(end)] for start, end in segments],
+            "progress_mode": "COUNT",
+            "total_quantity": len(segments),
+        },
+    }
+
+
 def zone(
     code: str,
     activity: str,
@@ -299,10 +316,14 @@ def roof_two_elements() -> list[dict[str, object]]:
         ((0.5747, 0.3726), (0.6924, 0.3726)),
         ((0.6235, 0.3047), (0.6924, 0.3047)),
         ((0.6712, 0.2376), (0.6950, 0.2376)),
-        ((0.4019, 0.2073), (0.4019, 0.6738)),
-        ((0.4442, 0.2066), (0.4442, 0.6717)),
-        ((0.4865, 0.2066), (0.4865, 0.6717)),
-        ((0.5283, 0.2073), (0.5283, 0.6752)),
+        # Four full-height reviewed members are split exactly at their
+        # midpoint so the upper and lower halves can be inspected separately.
+        # Keep these original list positions for the upper halves so existing
+        # per-piece progress remains attached to the same physical member.
+        ((0.4019, 0.2073), (0.4019, (0.2073 + 0.6738) / 2)),
+        ((0.4442, 0.2066), (0.4442, (0.2066 + 0.6717) / 2)),
+        ((0.4865, 0.2066), (0.4865, (0.2066 + 0.6717) / 2)),
+        ((0.5283, 0.2073), (0.5283, (0.2073 + 0.6752) / 2)),
         # On the right roof plane the pink middle portions are purlin-side
         # zones, not box rafters. Keep only the upper and lower rafter pieces.
         ((0.5760, 0.2073), (0.5760, 0.3726)),
@@ -317,10 +338,52 @@ def roof_two_elements() -> list[dict[str, object]]:
         ((0.2221, 0.5736), (0.2221, 0.6717)),
         ((0.1748, 0.6406), (0.1748, 0.6717)),
     ]
+    split_box_rafter_lower_halves = [
+        ((0.4019, (0.2073 + 0.6738) / 2), (0.4019, 0.6738)),
+        ((0.4442, (0.2066 + 0.6717) / 2), (0.4442, 0.6717)),
+        ((0.4865, (0.2066 + 0.6717) / 2), (0.4865, 0.6717)),
+        ((0.5283, (0.2073 + 0.6752) / 2), (0.5283, 0.6752)),
+    ]
+    # The reviewed green markup divides the 29 box rafters into four
+    # countable work sets. Inspectors enter the number completed for a set,
+    # matching the purlin workflow, while every physical member remains
+    # visible on the plan through the group's ``lines`` geometry.
+    box_rafter_groups = [
+        quantity_group(
+            "R2-RAFTER-GROUP-UPPER",
+            "BOX_RAFTER",
+            [box_rafter[index] for index in (10, 11, 12, 13, 14, 16, 18)],
+        ),
+        quantity_group(
+            "R2-RAFTER-GROUP-RIGHT",
+            "BOX_RAFTER",
+            [box_rafter[index] for index in (0, 2, 4, 6, 7, 8, 9)],
+        ),
+        quantity_group(
+            "R2-RAFTER-GROUP-LOWER",
+            "BOX_RAFTER",
+            [
+                box_rafter[index]
+                for index in (24, 23, 22, 20, 21, 15, 17, 19)
+            ] + split_box_rafter_lower_halves,
+        ),
+        quantity_group(
+            "R2-RAFTER-GROUP-LEFT",
+            "BOX_RAFTER",
+            [box_rafter[index] for index in (1, 3, 5)],
+        ),
+        *[
+            {
+                **line(f"R2-RAFTER-LEGACY-{index}", "BOX_RAFTER", start, end),
+                "is_active": False,
+            }
+            for index, (start, end) in enumerate(box_rafter[4:], start=5)
+        ],
+    ]
     # Latest red review: purlins exist only on the roof planes. The four
     # horizontal members and one short vertical inside the orange bridge
     # frame are deliberately excluded.
-    steel_purlin = [
+    steel_purlin_lines = [
         ((0.1523, 0.6735), (0.6938, 0.6735)),
         ((0.1831, 0.6309), (0.6626, 0.6309)),
         ((0.2104, 0.5890), (0.6338, 0.5890)),
@@ -342,12 +405,40 @@ def roof_two_elements() -> list[dict[str, object]]:
         ((0.6638, 0.2495), (0.6638, 0.6323)),
         ((0.6936, 0.2039), (0.6936, 0.6738)),
     ]
-
+    # The reviewed green markup defines four countable sets, each containing
+    # five purlins: upper, right, lower and left. Keep 20 list positions so
+    # later PLAN-ROOF IDs do not move; only the first four are active groups.
+    steel_purlin = [
+        quantity_group("R2-PURLIN-GROUP-UPPER", "STEEL_PURLIN", steel_purlin_lines[5:10]),
+        quantity_group("R2-PURLIN-GROUP-RIGHT", "STEEL_PURLIN", steel_purlin_lines[15:20]),
+        quantity_group("R2-PURLIN-GROUP-LOWER", "STEEL_PURLIN", steel_purlin_lines[0:5]),
+        quantity_group("R2-PURLIN-GROUP-LEFT", "STEEL_PURLIN", steel_purlin_lines[10:15]),
+        *[
+            {
+                **line(f"R2-PURLIN-LEGACY-{index}", "STEEL_PURLIN", start, end),
+                "is_active": False,
+            }
+            for index, (start, end) in enumerate(steel_purlin_lines[4:], start=5)
+        ],
+    ]
     items.extend(reviewed_lines("R2-RIDGE", "RIDGE", ridge))
     items.extend(reviewed_lines("R2-BRIDGE", "RAFTER_BRIDGE", rafter_bridge))
     items.extend(reviewed_lines("R2-HIP", "HIP_RIDGE", hip_ridge))
-    items.extend(reviewed_lines("R2-RAFTER", "BOX_RAFTER", box_rafter))
-    items.extend(reviewed_lines("R2-PURLIN", "STEEL_PURLIN", steel_purlin))
+    # Preserve the 25 original list slots so the PLAN-ROOF IDs of all later
+    # work types (especially the purlin groups) do not move.
+    items.extend(box_rafter_groups)
+    items.extend(steel_purlin)
+    # Keep the four former lower-half slots inactive for stable global IDs.
+    items.extend([
+        {
+            **line(f"R2-RAFTER-LOWER-LEGACY-{index}", "BOX_RAFTER", start, end),
+            "is_active": False,
+        }
+        for index, (start, end) in enumerate(
+            split_box_rafter_lower_halves,
+            start=1,
+        )
+    ])
     return items
 
 
@@ -499,8 +590,9 @@ def import_reviewed_roofs(project_id: uuid.UUID) -> dict[str, object]:
                 element.name = f"{floor.name} · {reviewed['activity_wbs']}"
                 element.geometry_json = geometry
                 element.source = "REVIEWED_ROOF_PLAN"
-                element.is_active = True
-                counts[floor.name] = counts.get(floor.name, 0) + 1
+                element.is_active = bool(reviewed.get("is_active", True))
+                if element.is_active:
+                    counts[floor.name] = counts.get(floor.name, 0) + 1
         db.commit()
         return {
             "available_from": ROOF_AVAILABLE_FROM.isoformat(),

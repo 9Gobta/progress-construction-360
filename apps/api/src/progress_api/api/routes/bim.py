@@ -4,18 +4,25 @@ import os
 import re
 import tempfile
 import uuid
+from decimal import Decimal
 from pathlib import PurePath
 from typing import Annotated
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
 from progress_api.access import require_project_role
 from progress_api.config import get_settings
 from progress_api.dependencies import CurrentUser, DbSession
-from progress_api.models import MediaFile
+from progress_api.models import BimViewpoint, Capture, Keyframe, MediaFile
 from progress_api.object_storage import presign_get_object, upload_file
-from progress_api.schemas.bim import BimModelListRead, BimModelRead
+from progress_api.schemas.bim import (
+    BimModelListRead,
+    BimModelRead,
+    BimViewpointRead,
+    BimViewpointWrite,
+)
 
 router = APIRouter()
 settings = get_settings()
@@ -77,6 +84,140 @@ def list_bim_models(
     rows = _bim_rows(project_id, db)
     versions = [_read_model(row, version_no=index + 1) for index, row in enumerate(rows)]
     return BimModelListRead(active=versions[-1] if versions else None, versions=versions)
+
+
+@router.get("/{project_id}/bim-models/{model_id}/file")
+def download_bim_model(
+    project_id: uuid.UUID,
+    model_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> RedirectResponse:
+    """Authorize an IFC download before redirecting the web proxy to storage."""
+    require_project_role(db, project_id=project_id, user_id=user.id)
+    row = db.get(MediaFile, model_id)
+    if (
+        row is None
+        or row.project_id != project_id
+        or row.media_kind != "BIM_IFC"
+        or row.upload_status != "READY"
+    ):
+        raise HTTPException(status_code=404, detail="ไม่พบโมเดล BIM")
+    return RedirectResponse(presign_get_object(key=row.object_key, expires_in=300), status_code=307)
+
+
+def _require_model_and_keyframe(
+    *, project_id: uuid.UUID, model_id: uuid.UUID, keyframe_id: uuid.UUID, db: DbSession
+) -> None:
+    model = db.get(MediaFile, model_id)
+    keyframe = db.scalar(
+        select(Keyframe)
+        .join(Capture, Keyframe.capture_id == Capture.id)
+        .where(Keyframe.id == keyframe_id, Capture.project_id == project_id)
+    )
+    if (
+        model is None
+        or model.project_id != project_id
+        or model.media_kind != "BIM_IFC"
+        or model.upload_status != "READY"
+        or keyframe is None
+    ):
+        raise HTTPException(status_code=404, detail="ไม่พบโมเดล BIM หรือจุดวาร์ป")
+
+
+def _viewpoint_read(row: BimViewpoint) -> BimViewpointRead:
+    return BimViewpointRead(
+        id=row.id,
+        project_id=row.project_id,
+        model_media_file_id=row.model_media_file_id,
+        keyframe_id=row.keyframe_id,
+        position_x=float(row.position_x),
+        position_y=float(row.position_y),
+        position_z=float(row.position_z),
+        target_x=float(row.target_x),
+        target_y=float(row.target_y),
+        target_z=float(row.target_z),
+        fov=float(row.fov),
+        updated_by_id=row.updated_by_id,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+@router.get(
+    "/{project_id}/bim-models/{model_id}/viewpoints/{keyframe_id}",
+    response_model=BimViewpointRead | None,
+)
+def get_bim_viewpoint(
+    project_id: uuid.UUID,
+    model_id: uuid.UUID,
+    keyframe_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> BimViewpointRead | None:
+    require_project_role(db, project_id=project_id, user_id=user.id)
+    _require_model_and_keyframe(
+        project_id=project_id, model_id=model_id, keyframe_id=keyframe_id, db=db
+    )
+    row = db.scalar(
+        select(BimViewpoint).where(
+            BimViewpoint.model_media_file_id == model_id,
+            BimViewpoint.keyframe_id == keyframe_id,
+        )
+    )
+    return _viewpoint_read(row) if row else None
+
+
+@router.put(
+    "/{project_id}/bim-models/{model_id}/viewpoints/{keyframe_id}",
+    response_model=BimViewpointRead,
+)
+def save_bim_viewpoint(
+    project_id: uuid.UUID,
+    model_id: uuid.UUID,
+    keyframe_id: uuid.UUID,
+    payload: BimViewpointWrite,
+    db: DbSession,
+    user: CurrentUser,
+) -> BimViewpointRead:
+    require_project_role(
+        db,
+        project_id=project_id,
+        user_id=user.id,
+        allowed_roles={"admin", "sub_admin", "reviewer"},
+    )
+    _require_model_and_keyframe(
+        project_id=project_id, model_id=model_id, keyframe_id=keyframe_id, db=db
+    )
+    row = db.scalar(
+        select(BimViewpoint).where(
+            BimViewpoint.model_media_file_id == model_id,
+            BimViewpoint.keyframe_id == keyframe_id,
+        )
+    )
+    values = {
+        field: Decimal(str(getattr(payload, field)))
+        for field in (
+            "position_x", "position_y", "position_z",
+            "target_x", "target_y", "target_z", "fov",
+        )
+    }
+    if row is None:
+        row = BimViewpoint(
+            project_id=project_id,
+            model_media_file_id=model_id,
+            keyframe_id=keyframe_id,
+            updated_by_id=user.id,
+            **values,
+        )
+        db.add(row)
+    else:
+        for field, value in values.items():
+            setattr(row, field, value)
+        row.updated_by_id = user.id
+    db.commit()
+    db.refresh(row)
+    return _viewpoint_read(row)
 
 
 @router.post(

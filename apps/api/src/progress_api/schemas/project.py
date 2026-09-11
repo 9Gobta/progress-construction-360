@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -10,6 +10,7 @@ class ProjectCreate(BaseModel):
     location: str | None = Field(default=None, max_length=300)
     timezone: str = "Asia/Bangkok"
     description: str | None = Field(default=None, max_length=3000)
+    structural_tracking_end_date: date | None = None
 
     @field_validator("timezone")
     @classmethod
@@ -29,10 +30,15 @@ class ProjectRead(BaseModel):
     location: str | None
     timezone: str
     description: str | None
+    structural_tracking_end_date: date | None
     created_by_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
     role: str | None = None
+
+
+class ProjectScopeUpdate(BaseModel):
+    structural_tracking_end_date: date | None
 
 
 class ProjectMemberCreate(BaseModel):

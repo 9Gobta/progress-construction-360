@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from progress_api.services.localization import (
     _anchor_constrained_alignment,
     _estimate_prior_affine,
     _plan_cluster,
+    _transform_with_fixed_start,
+    _transform_with_fixed_start_affine,
 )
 from progress_api.services.sfm_localization import SfMPathSample
 
@@ -78,3 +81,29 @@ def test_anchor_alignment_pins_video_start_and_rejects_one_bad_landmark() -> Non
 def test_nearby_human_labels_share_one_plan_landmark_cluster() -> None:
     assert _plan_cluster(0.300, 0.400) == _plan_cluster(0.306, 0.399)
     assert _plan_cluster(0.300, 0.400) != _plan_cluster(0.380, 0.400)
+
+
+def test_similarity_heading_uses_stella_forward_z_axis() -> None:
+    transformed = _transform_with_fixed_start(
+        [(0.0, 0.0, 0.0), (0.0, 0.0, 90.0)],
+        start_x=0.5,
+        start_y=0.5,
+        scale=0.1,
+        rotation_deg=0.0,
+    )
+
+    assert transformed[0][2] == pytest.approx(90.0)
+    assert transformed[1][2] == pytest.approx(0.0)
+
+
+def test_affine_heading_uses_same_basis_as_position_transform() -> None:
+    matrix = np.asarray([[0.0, -0.2], [0.3, 0.0]])
+    transformed = _transform_with_fixed_start_affine(
+        [(0.0, 0.0, 0.0), (0.0, 0.0, 90.0)],
+        start_x=0.5,
+        start_y=0.5,
+        matrix=matrix,
+    )
+
+    assert transformed[0][2] == pytest.approx(0.0)
+    assert transformed[1][2] == pytest.approx(270.0)

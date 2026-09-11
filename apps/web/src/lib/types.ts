@@ -12,6 +12,7 @@ export type Project = {
   location: string | null;
   timezone: string;
   description: string | null;
+  structural_tracking_end_date: string | null;
   created_by_id: string;
   created_at: string;
   updated_at: string;
@@ -25,6 +26,51 @@ export type ProjectMember = {
   display_name: string;
   role: "admin" | "sub_admin" | "reviewer" | "viewer";
   created_at: string;
+};
+
+export type FieldNoteStatus = "OPEN" | "P1" | "P2" | "P3" | "COMPLETED" | "VERIFIED";
+
+export type FieldNote = {
+  id: string;
+  project_id: string;
+  capture_id: string;
+  capture_date: string;
+  floor_id: string;
+  floor_name: string;
+  keyframe_id: string;
+  keyframe_timestamp_ms: number;
+  image_url: string;
+  title: string;
+  description: string | null;
+  status: FieldNoteStatus;
+  due_date: string | null;
+  tags: string[];
+  markup_paths: Array<Array<[number, number]>>;
+  assignee_id: string | null;
+  assignee_name: string | null;
+  plan_x: number | null;
+  plan_y: number | null;
+  panorama_longitude: number;
+  panorama_latitude: number;
+  panorama_fov: number;
+  created_by_id: string;
+  created_by_name: string;
+  created_at: string;
+  updated_at: string;
+  comments: Array<{
+    id: string;
+    body: string;
+    created_by_id: string;
+    created_by_name: string;
+    created_at: string;
+  }>;
+  attachments: Array<{
+    id: string;
+    filename: string;
+    content_type: string;
+    size_bytes: number;
+    download_url: string;
+  }>;
 };
 
 export type TokenResponse = {
@@ -84,6 +130,25 @@ export type HumanProgressEntry = {
   note: string | null;
   entered_by_id: string;
   created_at: string;
+};
+
+export type ProgressComparisonItem = {
+  activity_id: string;
+  wbs: string;
+  name: string;
+  planned_percent: string;
+  human_actual_percent: string | null;
+  human_observed_at: string | null;
+  variance_pp: string | null;
+};
+
+export type ProgressComparison = {
+  project_id: string;
+  capture_id: string;
+  capture_date: string;
+  schedule_version_id: string;
+  schedule_name: string;
+  items: ProgressComparisonItem[];
 };
 
 export type Floor = {
@@ -156,6 +221,23 @@ export type BimModelList = {
   versions: BimModel[];
 };
 
+export type BimViewpoint = {
+  id: string;
+  project_id: string;
+  model_media_file_id: string;
+  keyframe_id: string;
+  position_x: number;
+  position_y: number;
+  position_z: number;
+  target_x: number;
+  target_y: number;
+  target_z: number;
+  fov: number;
+  updated_by_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MultipartInitiate = {
   media: MediaFile;
   upload_session_id: string;
@@ -175,6 +257,13 @@ export type MultipartStatus = {
   expires_at: string;
   uploaded_parts: Array<{ part_number: number; etag: string; size_bytes: number }>;
   upload_urls: Array<{ part_number: number; url: string }>;
+};
+
+export type MultipartComplete = {
+  media: MediaFile;
+  capture_id: string;
+  capture_status: string;
+  processing_job_id: string;
 };
 
 export type StorageStatus = {
@@ -341,8 +430,11 @@ export type StructuralElement = {
   name: string | null;
   geometry_json: {
     line?: [[number, number], [number, number]];
+    lines?: Array<[[number, number], [number, number]]>;
     footprint?: Array<[number, number]>;
     activity_wbs?: string;
+    progress_mode?: "COUNT";
+    total_quantity?: number;
   };
   source: string;
   is_active: boolean;
@@ -367,8 +459,8 @@ export type BeamProgress = {
     end_y: string;
     length_m: string | null;
     progress_percent: string | null;
-    completed_stages: Array<"SETTING_OUT" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM">;
-    stage_ranges: Partial<Record<"SETTING_OUT" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM", Array<{
+    completed_stages: Array<"SETTING_OUT" | "SHORING" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM">;
+    stage_ranges: Partial<Record<"SETTING_OUT" | "SHORING" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM", Array<{
       start_m: string;
       end_m: string;
     }>>>;
@@ -378,7 +470,7 @@ export type BeamProgress = {
     created_at: string | null;
   }>;
   stage_summaries: Array<{
-    stage: "SETTING_OUT" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM";
+    stage: "SETTING_OUT" | "SHORING" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM";
     completed_length_m: string;
     total_length_m: string;
     progress_percent: string;
@@ -416,7 +508,38 @@ export type ColumnProgress = {
   }>;
 };
 
-export type SlabStageCode = "STEP_1" | "STEP_2" | "STEP_3" | "STEP_4" | "STEP_5";
+export type StairStageCode = "SHORING" | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM";
+
+export type StairProgress = {
+  project_id: string;
+  capture_id: string;
+  floor_id: string;
+  labeled_count: number;
+  stair_count: number;
+  progress_percent: string;
+  stage_summaries: Array<{
+    stage: StairStageCode;
+    completed_count: number;
+    total_count: number;
+    progress_percent: string;
+  }>;
+  items: Array<{
+    structural_element_id: string;
+    code: string;
+    geometry_json: { footprint?: Array<[number, number]> };
+    progress_percent: string | null;
+    completed_stages: StairStageCode[];
+    evidence_keyframe_id: string | null;
+    note: string | null;
+    entered_by_id: string | null;
+    created_at: string | null;
+  }>;
+};
+
+export type SlabStageCode =
+  | "STEP_1" | "STEP_2" | "STEP_3" | "STEP_4" | "STEP_5"
+  | "SHORING" | "PLACE_PRECAST" | "SOIL_COMPACTION"
+  | "REBAR" | "FORMWORK" | "CONCRETE" | "STRIP_FORM";
 
 export type SlabProgress = {
   project_id: string;
@@ -436,9 +559,44 @@ export type SlabProgress = {
     structural_element_id: string;
     code: string;
     area_m2: string;
-    geometry_json: { footprint?: Array<[number, number]> };
+    geometry_json: {
+      footprint?: Array<[number, number]>;
+      slab_type?: "GS" | "S1" | "PC1";
+      slab_workflow?: "GS" | "S1_FLOOR_1" | "S1" | "PC1";
+    };
     progress_percent: string | null;
     completed_stages: SlabStageCode[];
+    evidence_keyframe_id: string | null;
+    note: string | null;
+    entered_by_id: string | null;
+    created_at: string | null;
+  }>;
+};
+
+export type RoofProgress = {
+  project_id: string;
+  capture_id: string;
+  floor_id: string;
+  labeled_count: number;
+  element_count: number;
+  progress_percent: string;
+  items: Array<{
+    structural_element_id: string;
+    code: string;
+    activity_wbs: string;
+    geometry_json: {
+      line?: [[number, number], [number, number]];
+      lines?: Array<[[number, number], [number, number]]>;
+      footprint?: Array<[number, number]>;
+      activity_wbs?: string;
+      progress_mode?: "COUNT";
+      total_quantity?: number;
+    };
+    progress_percent: string | null;
+    complete: boolean;
+    completed_quantity: number | null;
+    total_quantity: number | null;
+    capture_id: string | null;
     evidence_keyframe_id: string | null;
     note: string | null;
     entered_by_id: string | null;

@@ -19,18 +19,18 @@ from pathlib import Path
 
 import numpy as np
 import pycolmap
-from progress_api.db import SessionLocal
 from progress_api.config import get_settings
+from progress_api.db import SessionLocal
 from progress_api.models import CameraPose, Capture, Keyframe, MediaFile
 from progress_api.object_storage import upload_file
-from progress_api.services.video_pipeline import (
-    TourStationSample,
-    select_spatial_warp_points,
-)
 from progress_api.services.sfm_localization import (
     CAMERA_HEIGHT_M,
     _estimate_camera_height,
     _write_spatial_model,
+)
+from progress_api.services.video_pipeline import (
+    TourStationSample,
+    select_spatial_warp_points,
 )
 from sqlalchemy import select
 

@@ -43,15 +43,18 @@ def external_media_paths() -> list[Path]:
 
 
 def _local_guard_path() -> Path | None:
+    # Integration tests use temporary databases and mocked object storage. Do
+    # not let a developer-specific STORAGE_GUARD_PATH from the repository
+    # .env make otherwise isolated tests depend on the host machine's free
+    # space. Tests that exercise the low-space branch patch upload_capacity
+    # explicitly at the API boundary.
+    if "PYTEST_CURRENT_TEST" in os.environ:
+        return None
+
     settings = get_settings()
     configured = settings.processing_temp_dir or settings.storage_guard_path
     if configured:
         return Path(configured).expanduser()
-
-    # Test suites use temporary databases and mocked object storage; never bind
-    # their upload assertions to the developer machine's real free space.
-    if "PYTEST_CURRENT_TEST" in os.environ:
-        return None
 
     # The development MinIO volume and Python temporary directory both consume
     # the Windows system drive through Docker Desktop. Infer it only for the
@@ -181,6 +184,39 @@ def put_object(*, key: str, body: bytes | BinaryIO, content_type: str) -> None:
 def delete_object(*, key: str) -> None:
     settings = get_settings()
     get_s3_client().delete_object(Bucket=settings.s3_bucket, Key=key)
+
+
+def delete_objects_with_prefix(*, prefix: str) -> int:
+    """Delete every managed object below an exact project-scoped prefix."""
+    settings = get_settings()
+    client = get_s3_client()
+    deleted = 0
+    continuation_token: str | None = None
+    while True:
+        request: dict[str, object] = {
+            "Bucket": settings.s3_bucket,
+            "Prefix": prefix,
+            "MaxKeys": 1000,
+        }
+        if continuation_token:
+            request["ContinuationToken"] = continuation_token
+        response = client.list_objects_v2(**request)
+        objects = [
+            {"Key": item["Key"]}
+            for item in response.get("Contents", [])
+            if item.get("Key")
+        ]
+        if objects:
+            client.delete_objects(
+                Bucket=settings.s3_bucket,
+                Delete={"Objects": objects, "Quiet": True},
+            )
+            deleted += len(objects)
+        if not response.get("IsTruncated"):
+            return deleted
+        continuation_token = response.get("NextContinuationToken")
+        if not continuation_token:
+            return deleted
 
 
 def create_multipart_upload(*, key: str, content_type: str) -> str:

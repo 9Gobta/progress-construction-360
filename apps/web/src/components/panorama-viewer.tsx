@@ -14,6 +14,7 @@ import {
 } from "react";
 import * as THREE from "three";
 
+import { groundPortalPlacement } from "@/lib/portal-placement";
 import type { CaptureDetail, Floor, FloorPlanInfo } from "@/lib/types";
 
 type Keyframe = CaptureDetail["keyframes"][number];
@@ -233,6 +234,55 @@ function visualHeading(frame: Keyframe) {
   return Number(frame.pose?.visual_heading_deg ?? frame.pose?.heading_deg ?? 0);
 }
 
+const TOUR_ROUTE_SOURCES = new Set([
+  "visual-slam-pose",
+  "full-6dof-mesh",
+  "stabilized-360-mesh",
+]);
+
+function isUsableTourRoute(route: CaptureDetail["route_vectors"][number]) {
+  return route.verified
+    && TOUR_ROUTE_SOURCES.has(route.direction_source)
+    && route.confidence >= 0.25
+    && route.distance > 1e-8;
+}
+
+function tourFrames(detail: CaptureDetail) {
+  // API/database row order is not a playback order. Always build the tour
+  // chronologically so a freshly opened capture starts at its earliest
+  // available station and the previous/next controls move through time.
+  const orderedFrames = [...detail.keyframes].sort((first, second) => (
+    first.timestamp_ms - second.timestamp_ms || first.id.localeCompare(second.id)
+  ));
+  const posed = orderedFrames.filter((frame) => frame.pose !== null);
+  const selected = posed.filter((frame) => frame.is_warp_point);
+  const connectedIds = new Set(
+    detail.route_vectors
+      .filter(isUsableTourRoute)
+      .flatMap((route) => [route.from_keyframe_id, route.to_keyframe_id]),
+  );
+  const connected = selected.filter((frame) => connectedIds.has(frame.id));
+  // A spatial tour exposes one station per physical place. Legacy captures
+  // sometimes marked every half-second frame as a station, including long
+  // runs of identical coordinates. Those zero-distance frames cannot form a
+  // portal, so prefer graph-backed stations. Still retain the real first and
+  // last selected frames: localization may only have a connected route for a
+  // middle section of the clip, but opening a capture must never silently
+  // begin minutes into the source video.
+  if (connected.length >= 2) {
+    const boundaryFrames = [selected[0], selected[selected.length - 1]].filter(
+      (frame): frame is Keyframe => Boolean(frame),
+    );
+    return [...new Map(
+      [...boundaryFrames, ...connected].map((frame) => [frame.id, frame]),
+    ).values()].sort((first, second) => (
+      first.timestamp_ms - second.timestamp_ms || first.id.localeCompare(second.id)
+    ));
+  }
+  if (selected.length >= 2) return selected;
+  return posed.length ? posed : orderedFrames;
+}
+
 export function PanoramaViewer({
   detail,
   projectId,
@@ -243,6 +293,8 @@ export function PanoramaViewer({
   requestedKeyframeId,
   requestedViewToken,
   requestedWorldHeading,
+  requestedViewState,
+  requestedViewSyncToken,
 }: {
   detail: CaptureDetail;
   projectId: string;
@@ -253,8 +305,11 @@ export function PanoramaViewer({
   requestedKeyframeId?: string | null;
   requestedViewToken?: number;
   requestedWorldHeading?: number | null;
+  requestedViewState?: PanoramaViewState | null;
+  requestedViewSyncToken?: number;
 }) {
   const router = useRouter();
+  const initialTourFrames = tourFrames(detail);
   const containerRef = useRef<HTMLDivElement>(null);
   const planFileInputRef = useRef<HTMLInputElement>(null);
   const viewConeRef = useRef<HTMLSpanElement>(null);
@@ -285,12 +340,10 @@ export function PanoramaViewer({
   const viewRef = useRef({ longitude: 0, latitude: 0, fov: 70 });
   const initialPortalViewAppliedRef = useRef(false);
   const [selectedId, setSelectedId] = useState<string | null>(
-    detail.keyframes.find((frame) => (
+    initialTourFrames.find((frame) => (
       frame.id === requestedKeyframeId && frame.pose && frame.is_warp_point
     ))?.id
-      ?? detail.keyframes.find((frame) => frame.pose && frame.is_warp_point)?.id
-      ?? detail.keyframes.find((frame) => frame.pose)?.id
-      ?? detail.keyframes[0]?.id
+      ?? initialTourFrames[0]?.id
       ?? null,
   );
   const [activeFloorId, setActiveFloorId] = useState(
@@ -332,6 +385,7 @@ export function PanoramaViewer({
   const [mapExpanded, setMapExpanded] = useState(false);
   const [mapToolsOpen, setMapToolsOpen] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadedPlanFloorIds, setUploadedPlanFloorIds] = useState<string[]>([]);
@@ -347,12 +401,10 @@ export function PanoramaViewer({
     () => detail.keyframes.filter((frame) => frame.pose !== null),
     [detail.keyframes],
   );
-  const selectedTourFrames = posedFrames.filter((frame) => frame.is_warp_point);
-  const navigableFrames = selectedTourFrames.length >= 2
-    ? selectedTourFrames
-    : posedFrames.length ? posedFrames : detail.keyframes;
+  const navigableFrames = useMemo(() => tourFrames(detail), [detail]);
   const floorFrames = posedFrames.filter((frame) => frame.pose?.floor_id === activeFloorId);
-  const floorTourFrames = floorFrames.filter((frame) => frame.is_warp_point);
+  const navigableIds = new Set(navigableFrames.map((frame) => frame.id));
+  const floorTourFrames = floorFrames.filter((frame) => navigableIds.has(frame.id));
   const visibleFloorStations = floorTourFrames.length >= 2 ? floorTourFrames : floorFrames;
   const floorPathPoints = detail.path_points.filter((point) => point.floor_id === activeFloorId);
   const activeFloor = floors.find((floor) => floor.id === activeFloorId);
@@ -362,15 +414,20 @@ export function PanoramaViewer({
   const planInfo = planInfoState?.floorId === activeFloorId ? planInfoState.info : null;
   const verifiedPoseCount = floorFrames.filter((frame) => frame.pose && !frame.pose.needs_review).length;
   const alignmentVerified = floorFrames.length >= 2 && verifiedPoseCount === floorFrames.length;
+  const humanReviewedPoseCount = floorFrames.filter((frame) => Boolean(frame.pose?.reviewed_at)).length;
+  const humanAlignmentVerified = floorFrames.length >= 2 && humanReviewedPoseCount === floorFrames.length;
   const routeAlgorithms = [
     ...floorFrames.map((frame) => frame.pose?.algorithm ?? ""),
     ...floorPathPoints.map((point) => point.algorithm ?? ""),
   ];
   const hasUnalignedPlanRoute = routeAlgorithms.some((algorithm) => {
-    const isUnalignedFallback = /(grid6-road-edge-fit|plan-bounds-fit|unaligned-start-anchor|previous-orb|human-anchor-library-orb)/.test(algorithm);
+    const isUnalignedFallback = /(grid6-road-edge-fit|plan-bounds-fit|unaligned-start-anchor|previous-orb|human-anchor-library-orb|previous-route-shape)/.test(algorithm);
     const wasHumanAligned = /(rigid-plan-transform|dev-gt-affine|dev-gt-piecewise)/.test(algorithm);
     return isUnalignedFallback && !wasHumanAligned;
   });
+  const usesRepeatedRouteDraft = routeAlgorithms.some((algorithm) => (
+    algorithm.includes("previous-route-shape")
+  ));
   const persistentMapMatch = (() => {
     for (const frame of floorFrames) {
       const match = frame.pose?.algorithm.match(/persistent-map-v1:[^:]+:(\d+)-anchors/);
@@ -478,9 +535,7 @@ export function PanoramaViewer({
     return detail.route_vectors
       .filter((route) => (
         route.from_keyframe_id === selectedId
-        && route.verified
-        && ["visual-slam-pose", "full-6dof-mesh", "stabilized-360-mesh"].includes(route.direction_source)
-        && route.confidence >= 0.25
+        && isUsableTourRoute(route)
       ))
       .map((route) => ({
         ...route,
@@ -545,9 +600,7 @@ export function PanoramaViewer({
           ? detail.route_vectors
             .filter((route) => (
               route.from_keyframe_id === frame.id
-              && route.verified
-              && ["visual-slam-pose", "full-6dof-mesh"].includes(route.direction_source)
-              && route.confidence >= 0.25
+              && isUsableTourRoute(route)
             ))
             .map((route) => ({
               ...route,
@@ -570,20 +623,21 @@ export function PanoramaViewer({
           );
         } else if (nextPortal) {
           viewRef.current.longitude = nextPortal.local_yaw_deg;
-          if (nextPortal.direction_source === "visual-slam-pose") {
-            const horizontalDistance = Math.max(nextPortal.distance * (180 / 1.65), 1e-8);
-            const cameraToCameraHeight = Math.tan(
-              THREE.MathUtils.degToRad(nextPortal.local_pitch_deg ?? 0),
-            ) * horizontalDistance;
-            viewRef.current.latitude = Math.max(-75, Math.min(20, THREE.MathUtils.radToDeg(
-              Math.atan2(cameraToCameraHeight - 180, horizontalDistance),
-            )));
-          } else {
-            viewRef.current.latitude = Math.max(
-              -75,
-              Math.min(20, nextPortal.local_pitch_deg ?? -25),
-            );
-          }
+          const visualZ = Number(frame.pose.visual_z);
+          const visualGroundZ = Number(frame.pose.visual_ground_z);
+          const cameraHeight = frame.pose.visual_z !== null
+            && frame.pose.visual_ground_z !== null
+            && Number.isFinite(visualZ)
+            && Number.isFinite(visualGroundZ)
+            ? Math.abs(visualZ - visualGroundZ)
+            : null;
+          const placement = groundPortalPlacement({
+            distance: nextPortal.distance,
+            localYawDeg: nextPortal.local_yaw_deg,
+            reconstructedCameraHeight: cameraHeight,
+            fallbackStep: medianRouteDistance,
+          });
+          viewRef.current.latitude = Math.max(-75, Math.min(20, placement.pitchDeg));
         } else {
           viewRef.current.longitude = normalizedAngle(targetWorldHeading - visualHeading(frame));
         }
@@ -620,7 +674,14 @@ export function PanoramaViewer({
       tourImageCacheRef.current.set(frame.id, image);
       image.src = keyframeImageUrl(frame);
     }
-  }, [detail.keyframes, detail.route_vectors, keyframeImageUrl, onViewStateChange, selected]);
+  }, [
+    detail.keyframes,
+    detail.route_vectors,
+    keyframeImageUrl,
+    medianRouteDistance,
+    onViewStateChange,
+    selected,
+  ]);
 
   useEffect(() => {
     const cache = tourImageCacheRef.current;
@@ -663,37 +724,47 @@ export function PanoramaViewer({
     if (!nearestForward) return;
     initialPortalViewAppliedRef.current = true;
     viewRef.current.longitude = nearestForward.local_yaw_deg;
-    // The spatial reconstruction used by post-reference captures is already
-    // scaled to metres. Its route pitch describes camera-to-camera motion,
-    // while the rendered portal is placed on the walking surface one camera
-    // height lower. Aim at that rendered point on first load so the available
-    // portals cannot all sit below the viewport. Keep the proven full-6DoF
-    // reference-tour view behaviour unchanged.
-    const isMetricSpatialTour = selected?.pose?.algorithm.includes("+pycolmap-spatial-v1")
-      && nearestForward.direction_source === "visual-slam-pose";
-    if (isMetricSpatialTour) {
-      const horizontalDistance = Math.max(
-        nearestForward.distance * (180 / 1.65),
-        1e-8,
-      );
-      const cameraToCameraHeight = Math.tan(
-        THREE.MathUtils.degToRad(nearestForward.local_pitch_deg ?? 0),
-      ) * horizontalDistance;
-      const renderedPortalPitch = THREE.MathUtils.radToDeg(Math.atan2(
-        cameraToCameraHeight - 180,
-        horizontalDistance,
-      ));
-      viewRef.current.latitude = Math.max(-75, Math.min(20, renderedPortalPitch));
-    } else {
-      viewRef.current.latitude = Math.min(viewRef.current.latitude, -25);
-    }
+    const pose = selected?.pose;
+    const visualZ = Number(pose?.visual_z);
+    const visualGroundZ = Number(pose?.visual_ground_z);
+    const cameraHeight = pose?.visual_z !== null
+      && pose?.visual_z !== undefined
+      && pose.visual_ground_z !== null
+      && pose.visual_ground_z !== undefined
+      && Number.isFinite(visualZ)
+      && Number.isFinite(visualGroundZ)
+      ? Math.abs(visualZ - visualGroundZ)
+      : null;
+    const placement = groundPortalPlacement({
+      distance: nearestForward.distance,
+      localYawDeg: nearestForward.local_yaw_deg,
+      reconstructedCameraHeight: cameraHeight,
+      fallbackStep: medianRouteDistance,
+    });
+    viewRef.current.latitude = Math.max(-75, Math.min(20, placement.pitchDeg));
     panoramaRuntimeRef.current?.setView(
       viewRef.current.longitude,
       viewRef.current.latitude,
       viewRef.current.fov,
     );
     onViewStateChange?.({ ...viewRef.current });
-  }, [activeRouteVectors, onViewStateChange, selected?.pose?.algorithm, selected?.timestamp_ms]);
+  }, [
+    activeRouteVectors,
+    medianRouteDistance,
+    onViewStateChange,
+    selected?.pose,
+    selected?.timestamp_ms,
+  ]);
+
+  useEffect(() => {
+    if (!requestedViewState) return;
+    viewRef.current = { ...requestedViewState };
+    panoramaRuntimeRef.current?.setView(
+      requestedViewState.longitude,
+      requestedViewState.latitude,
+      requestedViewState.fov,
+    );
+  }, [requestedViewState, requestedViewSyncToken]);
 
   useEffect(() => {
     const requestKey = requestedKeyframeId
@@ -739,7 +810,21 @@ export function PanoramaViewer({
     if (!container || !selectedFrameRef.current) return;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(viewRef.current.fov, 1, 0.1, 1100);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      // An alpha canvas lets the still-image fallback remain visible on
+      // machines where WebGL creation/rendering silently fails. This happens
+      // on some remote reviewers' browsers with GPU acceleration disabled.
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setClearColor(0x000000, 0);
+    } catch {
+      window.setTimeout(() => setWebglUnavailable(true), 0);
+      return;
+    }
+    // Keep the ordinary image visible until WebGL has proven that it can
+    // render the panorama. A few Windows/browser combinations create a WebGL
+    // context successfully but return a completely black framebuffer.
+    renderer.domElement.style.visibility = "hidden";
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     container.appendChild(renderer.domElement);
     const geometry = new THREE.SphereGeometry(500, 60, 40);
@@ -870,20 +955,43 @@ export function PanoramaViewer({
       const hit = portalHitAt(event.clientX, event.clientY);
       const targetId = hit?.object.userData.targetId as string | undefined;
       const routes = activeRouteVectorsRef.current;
-      const target = routes.find((route) => route.to_keyframe_id === targetId)?.target;
-      if (!target || !hit) return;
+      const selectedRoute = routes.find((route) => route.to_keyframe_id === targetId);
+      const target = selectedRoute?.target;
+      if (!target || !hit || !selectedRoute) return;
       renderer.domElement.dataset.lastWarpTarget = target.id;
       const sourceFrame = selectedFrameRef.current;
       const targetWorldHeading = sourceFrame?.pose
         ? visualHeading(sourceFrame) + longitude
         : longitude;
-      selectKeyframeRef.current(target, targetWorldHeading);
+      // Full 6DoF tours have a stable world orientation, so preserving the
+      // clicked heading produces the reference-tour behaviour. Stella's
+      // monocular heading can drift between stations; carrying that angle to
+      // the destination can put every next portal behind the camera and make
+      // a successful warp look stuck. Let the destination face its nearest
+      // forward route in that case, exactly as keyboard navigation does.
+      selectKeyframeRef.current(
+        target,
+        selectedRoute.direction_source === "visual-slam-pose"
+          || target.pose?.algorithm.startsWith("stella-vslam-")
+          ? undefined
+          : targetWorldHeading,
+      );
     };
     const wheel = (event: WheelEvent) => {
       event.preventDefault();
       camera.fov = Math.min(95, Math.max(35, camera.fov + event.deltaY * 0.04));
       viewRef.current.fov = camera.fov;
       camera.updateProjectionMatrix();
+      renderRequested = true;
+    };
+    const contextLost = (event: Event) => {
+      event.preventDefault();
+      renderer.domElement.style.visibility = "hidden";
+      setWebglUnavailable(true);
+    };
+    const contextRestored = () => {
+      renderer.domElement.style.visibility = "visible";
+      setWebglUnavailable(false);
       renderRequested = true;
     };
     const render = (timestamp: number) => {
@@ -912,8 +1020,53 @@ export function PanoramaViewer({
       try {
         renderer.render(scene, camera);
       } catch {
-        setError("เปิดภาพ 360 ไม่สำเร็จ กรุณาลองเปลี่ยนภาพหรือรีเฟรชหน้า");
+        renderer.domElement.style.visibility = "hidden";
+        setWebglUnavailable(true);
         return;
+      }
+      if (renderer.domElement.dataset.textureVerification === "pending") {
+        let hasVisiblePixel = false;
+        try {
+          const context = renderer.getContext();
+          const pixel = new Uint8Array(4);
+          const samplePoints = [
+            [0.25, 0.25], [0.5, 0.25], [0.75, 0.25],
+            [0.25, 0.5], [0.5, 0.5], [0.75, 0.5],
+            [0.25, 0.75], [0.5, 0.75], [0.75, 0.75],
+          ];
+          for (const [sampleX, sampleY] of samplePoints) {
+            context.readPixels(
+              Math.floor(context.drawingBufferWidth * sampleX),
+              Math.floor(context.drawingBufferHeight * sampleY),
+              1,
+              1,
+              context.RGBA,
+              context.UNSIGNED_BYTE,
+              pixel,
+            );
+            if (pixel[3] > 0 && pixel[0] + pixel[1] + pixel[2] > 24) {
+              hasVisiblePixel = true;
+              break;
+            }
+          }
+        } catch {
+          hasVisiblePixel = false;
+        }
+        if (hasVisiblePixel) {
+          renderer.domElement.dataset.textureVerification = "passed";
+          renderer.domElement.style.visibility = "visible";
+          setWebglUnavailable(false);
+        } else {
+          const attempts = Number(renderer.domElement.dataset.textureVerificationAttempts ?? 0) + 1;
+          renderer.domElement.dataset.textureVerificationAttempts = String(attempts);
+          if (attempts >= 3) {
+            renderer.domElement.dataset.textureVerification = "failed";
+            renderer.domElement.style.visibility = "hidden";
+            setWebglUnavailable(true);
+          } else {
+            renderRequested = true;
+          }
+        }
       }
       if (timestamp - lastViewStateEmission >= 33) {
         lastViewStateEmission = timestamp;
@@ -937,10 +1090,14 @@ export function PanoramaViewer({
     renderer.domElement.addEventListener("pointerup", pointerUp);
     renderer.domElement.addEventListener("pointercancel", pointerUp);
     renderer.domElement.addEventListener("wheel", wheel, { passive: false });
+    renderer.domElement.addEventListener("webglcontextlost", contextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", contextRestored);
     render(performance.now());
     return () => {
       cancelAnimationFrame(animation);
       window.removeEventListener("resize", resize);
+      renderer.domElement.removeEventListener("webglcontextlost", contextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", contextRestored);
       panoramaRuntimeRef.current?.texture?.dispose();
       geometry.dispose();
       material.dispose();
@@ -977,6 +1134,10 @@ export function PanoramaViewer({
       runtime.sphereMaterial.map = nextTexture;
       runtime.sphereMaterial.needsUpdate = true;
       previousTexture?.dispose();
+      runtime.renderer.domElement.style.visibility = "hidden";
+      runtime.renderer.domElement.dataset.textureVerification = "pending";
+      runtime.renderer.domElement.dataset.textureVerificationAttempts = "0";
+      setWebglUnavailable(false);
       runtime.invalidate();
     };
 
@@ -1022,36 +1183,25 @@ export function PanoramaViewer({
       runtime.invalidate();
       return;
     }
-    // Rig SfM trajectories are normalised by the reconstructed walking surface
-    // to metric units. Legacy monocular trajectories still need the local-step
-    // fallback because they do not contain a trustworthy global scale.
-    const estimatedCameraHeight = 180;
-    const hasMetricSpatialTrack = selected.pose.algorithm.startsWith("rig-pycolmap-")
-      || selected.pose.algorithm.includes("+pycolmap-spatial-v1");
-    const estimatedCameraHeightInVisualUnits = hasMetricSpatialTrack
-      ? 1.65
-      : Math.max(medianRouteDistanceRef.current * 5, 1e-8);
-    const virtualUnitsPerVisualUnit = estimatedCameraHeight
-      / estimatedCameraHeightInVisualUnits;
+    const visualZ = Number(selected.pose.visual_z);
+    const visualGroundZ = Number(selected.pose.visual_ground_z);
+    const reconstructedCameraHeight = selected.pose.visual_z !== null
+      && selected.pose.visual_ground_z !== null
+      && Number.isFinite(visualZ)
+      && Number.isFinite(visualGroundZ)
+      ? Math.abs(visualZ - visualGroundZ)
+      : null;
     for (const route of activeRouteVectorsRef.current) {
-      const localBearing = THREE.MathUtils.degToRad(route.local_yaw_deg);
-      const localPitch = THREE.MathUtils.degToRad(route.local_pitch_deg ?? 0);
-      // Route vectors are already restricted to nearby, observed stations.
-      // Preserve their linear metric relationship so a ring remains anchored
-      // to the physical camera position represented in the panorama.
-      const horizontalDistance = route.distance * virtualUnitsPerVisualUnit;
-      // Legacy Stella poses store camera-to-camera elevation only; they do not
-      // contain the reconstructed floor-handle Z used by full 6DoF tours. Put
-      // their portals on the walking plane one camera-height below the source.
-      // Without this offset the annuli sit at eye level and are viewed edge-on,
-      // which made older dates report visible links while showing no rings.
-      const groundOffset = route.direction_source === "visual-slam-pose"
-        ? estimatedCameraHeight
-        : 0;
+      const placement = groundPortalPlacement({
+        distance: route.distance,
+        localYawDeg: route.local_yaw_deg,
+        reconstructedCameraHeight,
+        fallbackStep: medianRouteDistanceRef.current,
+      });
       const targetGround = new THREE.Vector3(
-        -Math.cos(localBearing) * horizontalDistance,
-        Math.tan(localPitch) * horizontalDistance - groundOffset,
-        -Math.sin(localBearing) * horizontalDistance,
+        placement.x,
+        placement.y,
+        placement.z,
       );
       const hotspot = new THREE.Mesh(runtime.hotspotGeometry, runtime.hotspotMaterial);
       hotspot.position.copy(targetGround);
@@ -1059,8 +1209,7 @@ export function PanoramaViewer({
       // Face the annulus toward the source camera so pitch/roll cannot collapse
       // the target into an unclickable line in the panorama.
       hotspot.rotation.x = -Math.PI / 2;
-      const portalRadius = Math.min(10, Math.max(1, horizontalDistance * 0.075));
-      hotspot.scale.setScalar(portalRadius);
+      hotspot.scale.setScalar(placement.radius);
       hotspot.renderOrder = 3;
       hotspot.userData.targetId = route.to_keyframe_id;
       runtime.hotspotMeshes.push(hotspot);
@@ -1072,7 +1221,7 @@ export function PanoramaViewer({
       );
       hitTarget.position.copy(targetGround);
       hitTarget.rotation.x = -Math.PI / 2;
-      hitTarget.scale.setScalar(portalRadius);
+      hitTarget.scale.setScalar(placement.radius);
       hitTarget.userData.targetId = route.to_keyframe_id;
       runtime.hotspotMeshes.push(hitTarget);
       runtime.scene.add(hitTarget);
@@ -1233,6 +1382,28 @@ export function PanoramaViewer({
       router.refresh();
     }
     setBusy(false);
+  }
+
+  async function confirmVirtualTour() {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/captures/${detail.capture.id}/poses/confirm`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ floor_id: activeFloorId }),
+        },
+      );
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.detail || "ยืนยัน Virtual Tour ไม่สำเร็จ");
+      router.refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "ยืนยัน Virtual Tour ไม่สำเร็จ");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function toggleControlPointMode() {
@@ -1491,12 +1662,24 @@ export function PanoramaViewer({
   return (
     <div className="spatial-review openspace-viewer">
       <div className="viewer-main" data-route-count={activeRouteVectors.length} data-tour-station-id={selected?.id ?? ""}>
-        {selected ? <div className="panorama-canvas" ref={containerRef} /> : <div className="viewer-empty">ยังไม่มีภาพ 360 — รอการประมวลผลไฟล์ต้นทางให้เสร็จ</div>}
-        {selected && <div className="virtual-tour-badge"><strong>Virtual Tour · จุด {selectedStationNumber}</strong><span>{activeRouteVectors.length} จุดที่มองเห็นจากตำแหน่งนี้ · {navigableFrames.length} จุดวาร์ปทั้งหมด</span></div>}
+        {selected ? <div className="panorama-canvas" ref={containerRef}>
+          <Image
+            alt={`ภาพ 360 จุดที่ ${selected.frame_index + 1}`}
+            className="panorama-fallback-image"
+            fill
+            key={selected.id}
+            priority
+            sizes="100vw"
+            src={keyframeImageUrl(selected)}
+            unoptimized
+          />
+          {webglUnavailable && <span className="panorama-compatibility-note">กำลังแสดงภาพสำรอง — เปิด Hardware acceleration เพื่อหมุนภาพ 360°</span>}
+        </div> : <div className="viewer-empty">ยังไม่มีภาพ 360 — รอการประมวลผลไฟล์ต้นทางให้เสร็จ</div>}
+        {selected && <div className="virtual-tour-badge"><strong>Virtual Tour · จุด {selectedStationNumber}</strong><span>{activeRouteVectors.length} จุดที่เดินต่อได้จากตำแหน่งนี้ · {navigableFrames.length} จุดวาร์ปทั้งหมด</span></div>}
 
         <section className={`capture-map-panel floating-map ${mapExpanded ? "is-expanded" : ""} ${aligning ? "is-aligning" : ""}`}>
           <div className="capture-map-toolbar">
-            <div><strong>{activeFloor?.name ?? "Floor"}</strong><small>{hasUnalignedPlanRoute ? `ยังไม่ระบุตำแหน่งบนแปลน · ${visibleFloorStations.length} สถานี Virtual Tour` : `${visibleFloorStations.length} สถานี Virtual Tour · ${floorPathPoints.length} จุดเส้นทาง`}</small>{hasUnalignedPlanRoute ? <span className="anchor-alignment-badge">มีเส้นทางสัมพัทธ์ · รอจับตำแหน่งกับแปลน</span> : isHoldout ? <span className="holdout-badge">HOLDOUT TEST · วัด Ground Truth เฉพาะชุดทดสอบ</span> : persistentMapMatch ? <span className={persistentMapMatch.accepted ? "auto-alignment-badge" : "anchor-alignment-badge"}>AI ใช้แผนที่สะสม · {persistentMapMatch.anchorCount} จุดอ้างอิง{persistentMapMatch.accepted ? " · พร้อมตรวจ Progress" : " · ความมั่นใจต่ำ"}</span> : alignmentVerified ? <span className="auto-alignment-badge">ตำแหน่งผ่านการยืนยันโดยคนแล้ว</span> : anchorMatchCount > 0 && <span className="anchor-alignment-badge">AI จับคู่ Landmark {anchorMatchCount} จุด · รอตรวจ</span>}</div>
+            <div><strong>{activeFloor?.name ?? "Floor"}</strong><small>{hasUnalignedPlanRoute ? `ยังไม่ระบุตำแหน่งบนแปลน · ${visibleFloorStations.length} สถานี Virtual Tour` : `${visibleFloorStations.length} สถานี Virtual Tour · ${floorPathPoints.length} จุดเส้นทาง`}</small>{hasUnalignedPlanRoute ? <span className="anchor-alignment-badge">มีเส้นทางสัมพัทธ์ · รอจับตำแหน่งกับแปลน</span> : isHoldout ? <span className="holdout-badge">HOLDOUT TEST · วัด Ground Truth เฉพาะชุดทดสอบ</span> : humanAlignmentVerified ? <span className="auto-alignment-badge">ผู้ตรวจยืนยันตำแหน่งครบแล้ว</span> : persistentMapMatch ? <span className={persistentMapMatch.accepted ? "auto-alignment-badge" : "anchor-alignment-badge"}>AI ใช้แผนที่สะสม · {persistentMapMatch.anchorCount} จุดอ้างอิง{persistentMapMatch.accepted ? " · รอตรวจ Virtual Tour" : " · ความมั่นใจต่ำ"}</span> : alignmentVerified ? <span className="anchor-alignment-badge">ระบบจัดตำแหน่งแล้ว · รอตรวจ Virtual Tour</span> : anchorMatchCount > 0 && <span className="anchor-alignment-badge">AI จับคู่ Landmark {anchorMatchCount} จุดอ้างอิง · รอตรวจ Virtual Tour</span>}</div>
             <button aria-expanded={mapToolsOpen} aria-label="เครื่องมือแผนที่" className={`map-tools-toggle ${mapToolsOpen ? "is-active" : ""}`} onClick={() => setMapToolsOpen((value) => !value)} title="เครื่องมือแผนที่" type="button">•••</button>
             <select aria-label="ชั้นที่แสดงบนแปลน" onChange={(event) => setActiveFloorId(event.target.value)} value={activeFloorId}>
               {floors.map((floor) => <option key={floor.id} value={floor.id}>{floor.name}</option>)}
@@ -1513,7 +1696,7 @@ export function PanoramaViewer({
             {canEdit && <button className="map-align" disabled={busy} onClick={() => planFileInputRef.current?.click()} type="button">{hasConfiguredPlan ? "เปลี่ยนแปลน" : "อัปโหลดแปลน"}</button>}
             {canEdit && posedFrames.length > 0 && <button className={`map-align ${startPointMode ? "is-active" : ""}`} disabled={busy} onClick={toggleStartPointMode} type="button">{startPointMode ? "ยกเลิกแก้จุดเริ่มต้น" : "แก้จุดเริ่มต้น"}</button>}
             {startPointMode && <button className="map-align map-save" disabled={busy} onClick={saveStartPoint} type="button">{busy ? "กำลังบันทึก..." : "บันทึกจุดเริ่มต้น"}</button>}
-            {showCalibrationTools && posedFrames.length > 0 && !aligning && !startPointMode && <button className={`map-align ${controlPointMode ? "is-active" : ""}`} disabled={busy} onClick={toggleControlPointMode} type="button">{controlPointMode ? "ยกเลิกสอบเทียบ" : "สอบเทียบเฉพาะวันที่ AI ไม่มั่นใจ"}</button>}
+            {showCalibrationTools && posedFrames.length > 0 && !aligning && !startPointMode && <button className={`map-align ${controlPointMode ? "is-active" : ""}`} disabled={busy} onClick={toggleControlPointMode} type="button">{controlPointMode ? "ยกเลิกกำหนดตำแหน่งจริง" : "กำหนดตำแหน่งจริง 3–5 จุด"}</button>}
             {showEvaluationTools && posedFrames.length > 0 && !aligning && !startPointMode && <button className={`map-align ${evaluationMode ? "is-active" : ""}`} disabled={busy} onClick={toggleEvaluationMode} type="button">{evaluationMode ? "ยกเลิกวัดผล" : "วัดผล Ground Truth"}</button>}
             {canAdjustPath && aligning && <button className="map-align map-save" disabled={busy || pathLeavesPlan} onClick={saveRigidAlignment} type="button">{busy ? "กำลังบันทึก..." : "บันทึกเส้นทาง"}</button>}
             {canAdjustPath && posedFrames.length > 0 && <button className={`map-align ${aligning ? "is-active" : ""}`} disabled={busy} onClick={toggleRigidAlignment} type="button">{aligning ? "ยกเลิกปรับแนว" : alignmentVerified ? "แก้แนวขั้นสูง (ไม่จำเป็น)" : "ปรับแนวเส้นทาง"}</button>}
@@ -1553,7 +1736,20 @@ export function PanoramaViewer({
               if (!displayPosition) return null;
               const confidence = Number(pose.confidence);
               const className = ["warp-point", selected?.id === frame.id ? "is-selected" : "", pose.needs_review ? "is-low-confidence" : "", pose.reviewed_at ? "is-reviewed" : ""].filter(Boolean).join(" ");
-              return <button aria-label={`จุดวาร์ป ${index + 1} เวลา ${timeLabel(frame.timestamp_ms)} ความมั่นใจ ${Math.round(confidence * 100)}%`} className={className} key={frame.id} onClick={(event) => { event.stopPropagation(); selectKeyframe(frame); }} style={{ left: `${displayPosition.x * 100}%`, top: `${displayPosition.y * 100}%` }} title={`${timeLabel(frame.timestamp_ms)} · ${confidenceLabel(frame)}`} type="button"><span /></button>;
+              return <button aria-label={`จุดวาร์ป ${index + 1} เวลา ${timeLabel(frame.timestamp_ms)} ความมั่นใจ ${Math.round(confidence * 100)}%`} className={className} key={frame.id} onClick={(event) => {
+                // Editing gestures belong to the plan, even when a dense route
+                // station sits under the pointer. Normal review clicks still
+                // open the selected 360 station.
+                if (startPointMode || aligning) return;
+                event.stopPropagation();
+                selectKeyframe(frame);
+              }} onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (startPointMode || aligning) return;
+                selectKeyframe(frame);
+              }} style={{ left: `${displayPosition.x * 100}%`, top: `${displayPosition.y * 100}%` }} title={`${timeLabel(frame.timestamp_ms)} · ${confidenceLabel(frame)}`} type="button"><span /></button>;
             })}
             {draftControlPoints.map((point, index) => {
               const frame = detail.keyframes.find((item) => item.id === point.keyframeId);
@@ -1564,8 +1760,8 @@ export function PanoramaViewer({
               return <button aria-label={`Ground Truth ${index + 1}`} className="evaluation-point-target" key={point.keyframeId} onClick={(event) => { event.stopPropagation(); if (frame) selectKeyframe(frame); }} style={{ left: `${point.x * 100}%`, top: `${point.y * 100}%` }} title={`Ground Truth ${index + 1} · ${frame ? timeLabel(frame.timestamp_ms) : ""}`} type="button">{index + 1}</button>;
             })}
           </div>
-          {hasUnalignedPlanRoute && !aligning ? <div className="alignment-warning">{usesRigTrajectory ? "ระบบ 360 rig คำนวณเส้นทางสัมพัทธ์และแกนระดับแล้ว" : "Stella คำนวณเส้นทางสัมพัทธ์ได้ แต่แกนระดับยังไม่ผ่านการยืนยัน"} แต่ยังไม่มีหลักฐานพอสำหรับวางตำแหน่งบนแปลน ระบบจึงแสดงเฉพาะจุดเริ่มต้นและไม่สร้างเส้นทางสมมุติ กด “ปรับแนวเส้นทาง” เมื่อต้องการตรวจและวางเส้นด้วยตนเอง</div> : isHoldout ? <div className="holdout-warning">ชุดทดสอบถูกล็อกไว้ ระบบจะแสดงผลเดิมและอนุญาตเฉพาะการบันทึก Ground Truth เพื่อวัด Accuracy</div> : posedFrames.length > 0 && !alignmentVerified && <div className="alignment-warning">เส้นสีส้มคือเส้นทางสัมพัทธ์จาก {usesRigTrajectory ? "360 rig" : "Stella VSLAM"} ซึ่งยังต้องจับตำแหน่งกับแปลนก่อนใช้อ้างอิง</div>}
-          {detail.evaluation_summary && <div className={`evaluation-summary ${detail.evaluation_summary.is_ready ? "is-ready" : ""}`}><strong>Localization Accuracy {Number(detail.evaluation_summary.accuracy_percent).toFixed(1)}%</strong><span>{detail.evaluation_summary.within_tolerance_count}/{detail.evaluation_summary.point_count} จุดคลาดเคลื่อนไม่เกิน 3% ของแปลน · {detail.evaluation_summary.is_ready ? "พร้อมใช้รายงานผล" : `ต้องมีอย่างน้อย ${detail.evaluation_summary.required_point_count} จุด`}</span></div>}
+          {hasUnalignedPlanRoute && !aligning ? <div className="alignment-warning">{usesRepeatedRouteDraft ? "เส้นสีส้มเป็นฉบับรอตรวจที่เทียบรูปทรงกับวันก่อนหน้า ไม่ใช่ตำแหน่งกล้องจริงที่ยืนยันแล้ว" : `${usesRigTrajectory ? "ระบบ 360 rig" : "Stella VSLAM"} คำนวณได้เพียงเส้นทางสัมพัทธ์`} จุดเริ่มต้นเพียงจุดเดียวไม่สามารถระบุทิศ หมุน และสเกลบนแปลนได้ครบ กรุณากด “กำหนดตำแหน่งจริง 3–5 จุด” และระบุตำแหน่งช่วงต้น–กลาง–ปลายก่อนนำไปตรวจ Progress</div> : isHoldout ? <div className="holdout-warning">ชุดทดสอบถูกล็อกไว้ ระบบจะแสดงผลเดิมและอนุญาตเฉพาะการบันทึก Ground Truth เพื่อวัด Accuracy</div> : posedFrames.length > 0 && !alignmentVerified && <div className="alignment-warning">เส้นสีส้มคือเส้นทางสัมพัทธ์จาก {usesRigTrajectory ? "360 rig" : "Stella VSLAM"} ซึ่งยังต้องจับตำแหน่งกับแปลนก่อนใช้อ้างอิง</div>}
+          {detail.evaluation_summary && <div className={`evaluation-summary ${detail.evaluation_summary.is_ready ? "is-ready" : ""}`}><strong>{isHoldout ? "Localization Accuracy" : "ความสอดคล้องกับจุดอ้างอิงบนแปลน"} {Number(detail.evaluation_summary.accuracy_percent).toFixed(1)}%</strong><span>{detail.evaluation_summary.within_tolerance_count}/{detail.evaluation_summary.point_count} จุดคลาดเคลื่อนไม่เกิน 3% ของแปลน · {isHoldout ? (detail.evaluation_summary.is_ready ? "พร้อมใช้รายงานผล" : `ต้องมีอย่างน้อย ${detail.evaluation_summary.required_point_count} จุด`) : "ใช้จัดแนวการเดิน ไม่ใช่ค่าพิกัดจากงานสำรวจ"}</span></div>}
           {aligning && <div className="rigid-transform-controls">
             <label><span>Scale X <strong>{draftScaleX.toFixed(4)}</strong></span><input aria-label="Scale X เส้นทาง Stella" max={scaleXMax} min={scaleXMin} onChange={(event) => setDraftScaleX(Number(event.target.value))} step={(scaleXMax - scaleXMin) / 1000} type="range" value={draftScaleX} /></label>
             <label><span>Scale Y <strong>{draftScaleY.toFixed(4)}</strong></span><input aria-label="Scale Y เส้นทาง Stella" max={scaleYMax} min={scaleYMin} onChange={(event) => setDraftScaleY(Number(event.target.value))} step={(scaleYMax - scaleYMin) / 1000} type="range" value={draftScaleY} /></label>
@@ -1581,9 +1777,10 @@ export function PanoramaViewer({
             {selected?.pose && <div className="pose-summary"><strong>{timeLabel(selected.timestamp_ms)}</strong><span>{activeFloor?.name} · {confidenceLabel(selected)}</span><small>{selected.pose.algorithm}</small></div>}
             {canEdit && posedFrames.length > 0 && <button className="button button-secondary" disabled={busy} onClick={toggleStartPointMode} type="button">{startPointMode ? "ยกเลิกแก้จุดเริ่มต้น" : "แก้จุดเริ่มต้น"}</button>}
             {startPointMode && <button className="button button-primary" disabled={busy} onClick={saveStartPoint} type="button">บันทึกจุดเริ่มต้น</button>}
-            {showCalibrationTools && posedFrames.length > 0 && <button className="button button-secondary" disabled={busy} onClick={toggleControlPointMode} type="button">{controlPointMode ? "ยกเลิกสอบเทียบ" : "สอบเทียบ 3–5 จุด"}</button>}
+            {showCalibrationTools && posedFrames.length > 0 && <button className="button button-secondary" disabled={busy} onClick={toggleControlPointMode} type="button">{controlPointMode ? "ยกเลิกกำหนดตำแหน่งจริง" : "กำหนดตำแหน่งจริง 3–5 จุด"}</button>}
             {showEvaluationTools && posedFrames.length > 0 && <button className="button button-secondary" disabled={busy} onClick={toggleEvaluationMode} type="button">{evaluationMode ? "ยกเลิกวัดผล" : "วัดผล Ground Truth"}</button>}
             {canAdjustPath && posedFrames.length > 0 && <button className="button button-secondary" disabled={busy} onClick={toggleRigidAlignment} type="button">{aligning ? "ยกเลิกปรับแนว" : alignmentVerified ? "แก้แนวขั้นสูง (ไม่จำเป็น)" : "ปรับเอง"}</button>}
+            {canAdjustPath && alignmentVerified && !humanAlignmentVerified && <button className="button button-primary" disabled={busy} onClick={confirmVirtualTour} type="button">ยืนยันว่า Virtual Tour ตรงกับแปลน</button>}
             {canAdjustPath && <button className="button button-primary" disabled={busy || processingActive} onClick={startLocalization} type="button">{processingActive ? "กำลังประมวลผล..." : "คำนวณ AI ใหม่"}</button>}
           </div>}
           {error && <p className="form-error">{error}</p>}

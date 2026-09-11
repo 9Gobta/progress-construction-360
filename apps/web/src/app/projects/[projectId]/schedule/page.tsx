@@ -28,7 +28,6 @@ export default async function SchedulePage({ params }: { params: Promise<{ proje
           <p className="sidebar-label">{project.name}</p>
           <nav>
             <Link href="/projects">← โครงการทั้งหมด</Link>
-            <span>ภาพรวม</span><span>แบบและพื้นที่</span>
             <Link className="is-active" href={`/projects/${projectId}/schedule`}>แผนงานและ Progress</Link>
             <Link href={`/projects/${projectId}/captures`}>Captures</Link><Link href={`/projects/${projectId}/dashboard`}>Dashboard</Link><Link href={`/projects/${projectId}/members`}>สมาชิก</Link><Link href={`/projects/${projectId}/settings`}>ตั้งค่าโครงการ</Link>
           </nav>

@@ -4,8 +4,8 @@ import pytest
 from progress_api.services.sfm_localization import (
     FACE_SIZE,
     SfMPathSample,
-    _face_parts,
     _estimate_camera_height,
+    _face_parts,
     _horizontal_heading,
     _interpolate,
     _panorama_heading,

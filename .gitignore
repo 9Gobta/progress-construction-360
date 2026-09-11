@@ -10,6 +10,7 @@ backups/
 .codex_build/
 .codex_tmp/
 .logs/
+.runtime-logs/
 .run/
 .runtime/
 *.inspect.ndjson

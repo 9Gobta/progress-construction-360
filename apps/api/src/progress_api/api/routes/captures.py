@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from math import atan2, ceil, cos, degrees, hypot, radians, sin
 from pathlib import PurePath
@@ -26,6 +26,7 @@ from progress_api.models import (
     PathControlPoint,
     PathEvaluationPoint,
     ProcessingJob,
+    Project,
     VideoMetadata,
 )
 from progress_api.models.base import utc_now
@@ -95,6 +96,9 @@ ROUTE_VECTOR_VISIBLE_LOOKAHEAD = 6
 ROUTE_VECTOR_MAX_VISIBLE_DISTANCE_FACTOR = 8.0
 ROUTE_VECTOR_MIN_STRAIGHTNESS = 0.82
 EVALUATION_REQUIRED_POINT_COUNT = 20
+PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
+PORTAL_CAMERA_HEIGHT_M = 1.65
+PORTAL_MAX_SAME_FLOOR_HEIGHT_DRIFT_M = 0.35
 
 
 def _require_upload_capacity(file_size_bytes: int) -> None:
@@ -226,6 +230,10 @@ def _build_route_vectors(
     # Every localized panorama is a reviewable station. The station flag is
     # retained so legacy/incomplete captures still have a safe fallback.
     tour_frames = [item for item in all_frames if getattr(item[0], "is_warp_point", False)]
+    is_protected_reference = any(
+        getattr(keyframe, "capture_id", None) == PROTECTED_REFERENCE_CAPTURE_ID
+        for keyframe, _pose in all_frames
+    )
     # An imported mesh visibility graph may legitimately target an in-between
     # panorama that is not one of the sparse map/timeline stations. Keep every
     # graph node available here; filtering first silently discarded approved
@@ -301,9 +309,9 @@ def _build_route_vectors(
                 links.add((target_frame.id, source_frame.id))
             previous = target
 
-    # A mesh-derived visibility graph is authoritative. It deliberately
-    # replaces temporal look-ahead so every unobstructed station can appear,
-    # while stations behind reconstructed walls/terrain remain hidden.
+    # A stored visibility graph supplies candidate links. Post-reference
+    # backfills can contain proximity-only candidates, so later captures also
+    # require temporal continuity and a straight observed route segment.
     if has_authoritative_visibility:
         links.clear()
         frames_by_id = {str(keyframe.id): (keyframe, pose) for keyframe, pose in frames}
@@ -325,6 +333,50 @@ def _build_route_vectors(
                     float(first.visual_y - second.visual_y),
                 )
             return float("inf")
+
+        station_index_by_id = {
+            keyframe.id: index for index, (keyframe, _pose) in enumerate(tour_frames)
+        }
+        station_steps = [
+            pose_distance(first, second)
+            for (_first_frame, first), (_second_frame, second) in zip(
+                tour_frames, tour_frames[1:], strict=False
+            )
+        ]
+        positive_station_steps = sorted(step for step in station_steps if step > 1e-8)
+        median_station_step = (
+            positive_station_steps[len(positive_station_steps) // 2]
+            if positive_station_steps
+            else 0.0
+        )
+
+        def is_safe_station_link(source_id: uuid.UUID, target_id: uuid.UUID) -> bool:
+            """Reject graph links that jump through an unobserved wall or turn."""
+            if is_protected_reference:
+                return True
+            source_index = station_index_by_id.get(source_id)
+            target_index = station_index_by_id.get(target_id)
+            if source_index is None or target_index is None:
+                return False
+            separation = abs(target_index - source_index)
+            if separation == 0 or separation > ROUTE_VECTOR_VISIBLE_LOOKAHEAD:
+                return False
+            left, right = sorted((source_index, target_index))
+            segment_poses = [pose for _frame, pose in tour_frames[left : right + 1]]
+            cumulative = sum(
+                pose_distance(first, second)
+                for first, second in zip(segment_poses, segment_poses[1:], strict=False)
+            )
+            direct = pose_distance(segment_poses[0], segment_poses[-1])
+            if not all(value < float("inf") for value in (cumulative, direct)):
+                return False
+            if separation == 1:
+                return True
+            if median_station_step and direct > (
+                median_station_step * ROUTE_VECTOR_MAX_VISIBLE_DISTANCE_FACTOR
+            ):
+                return False
+            return direct / max(cumulative, 1e-8) >= ROUTE_VECTOR_MIN_STRAIGHTNESS
 
         # A capture can be re-sampled into a new set of sparse tour stations
         # after its authoritative mesh graph was generated. Resolve both ends
@@ -381,7 +433,10 @@ def _build_route_vectors(
                         ),
                     ),
                 )[0].id
-                if mapped_target_id != source_frame.id:
+                if (
+                    mapped_target_id != source_frame.id
+                    and is_safe_station_link(source_frame.id, mapped_target_id)
+                ):
                     links.add((source_frame.id, mapped_target_id))
 
     by_id = {keyframe.id: pose for keyframe, pose in frames}
@@ -431,6 +486,21 @@ def _build_route_vectors(
                 continue
             if has_full_pose:
                 dz = float(target_ground_z - source_visual_z)
+                # The post-reference spatial backfill estimates its floor
+                # handle from the camera trajectory. Monocular vertical drift
+                # can otherwise lift a same-floor portal toward eye level and
+                # paint the ring on a wall. Preserve the audited reference
+                # exactly, but keep later same-floor portals within a realistic
+                # walking-surface band below the current camera.
+                if source.floor_id == target.floor_id and not is_protected_reference:
+                    target_visual_z = getattr(target, "visual_z", None)
+                    if target_visual_z is not None:
+                        camera_height_delta = float(target_visual_z - source_visual_z)
+                        bounded_delta = max(
+                            -PORTAL_MAX_SAME_FLOOR_HEIGHT_DRIFT_M,
+                            min(PORTAL_MAX_SAME_FLOOR_HEIGHT_DRIFT_M, camera_height_delta),
+                        )
+                        dz = bounded_delta - PORTAL_CAMERA_HEIGHT_M
             elif vertical_is_trusted:
                 dz = raw_dz
             else:
@@ -786,6 +856,16 @@ def get_capture_detail(
     capture = db.get(Capture, capture_id)
     if capture is None or capture.project_id != project_id:
         raise HTTPException(status_code=404, detail="ไม่พบ Capture")
+    project = db.get(Project, project_id)
+    if (
+        project
+        and project.structural_tracking_end_date
+        and capture.captured_at.date() > project.structural_tracking_end_date
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Capture นี้อยู่นอกช่วงติดตามงานโครงสร้าง",
+        )
     metadata = db.scalar(
         select(VideoMetadata).where(VideoMetadata.media_file_id == capture.source_video_id)
     )
@@ -1079,6 +1159,61 @@ def review_camera_pose(
     db.commit()
     db.refresh(pose)
     return pose
+
+
+@router.post(
+    "/{project_id}/captures/{capture_id}/poses/confirm",
+    response_model=list[CameraPoseRead],
+)
+def confirm_capture_floor_poses(
+    project_id: uuid.UUID,
+    capture_id: uuid.UUID,
+    floor_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> list[CameraPose]:
+    require_project_role(
+        db, project_id=project_id, user_id=user.id, allowed_roles={"admin", "reviewer"}
+    )
+    capture = db.get(Capture, capture_id)
+    floor = db.get(Floor, floor_id)
+    if (
+        capture is None
+        or capture.project_id != project_id
+        or floor is None
+        or floor.project_id != project_id
+    ):
+        raise HTTPException(status_code=404, detail="ไม่พบ Capture หรือชั้นอาคาร")
+    _require_development_capture(capture)
+    poses = list(
+        db.scalars(
+            select(CameraPose)
+            .join(Keyframe, Keyframe.id == CameraPose.keyframe_id)
+            .where(
+                Keyframe.capture_id == capture_id,
+                CameraPose.floor_id == floor_id,
+            )
+            .order_by(Keyframe.timestamp_ms)
+        )
+    )
+    if not poses:
+        raise HTTPException(status_code=409, detail="ยังไม่มีตำแหน่งภาพในชั้นนี้")
+    reviewed_at = utc_now()
+    for pose in poses:
+        pose.needs_review = False
+        pose.reviewed_by_id = user.id
+        pose.reviewed_at = reviewed_at
+        if "+human-confirmed" not in pose.algorithm:
+            pose.algorithm = f"{pose.algorithm}+human-confirmed"
+    remaining = db.scalar(
+        select(func.count(CameraPose.id))
+        .join(Keyframe, Keyframe.id == CameraPose.keyframe_id)
+        .where(Keyframe.capture_id == capture_id, CameraPose.needs_review.is_(True))
+    )
+    if not remaining:
+        capture.status = "READY"
+    db.commit()
+    return poses
 
 
 @router.post(
@@ -1864,13 +1999,17 @@ def list_captures(
     user: CurrentUser,
 ) -> list[Capture]:
     require_project_role(db, project_id=project_id, user_id=user.id)
-    return list(
-        db.scalars(
-            select(Capture)
-            .where(Capture.project_id == project_id)
-            .order_by(Capture.captured_at.desc())
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="ไม่พบโครงการ")
+    query = select(Capture).where(Capture.project_id == project_id)
+    if project.structural_tracking_end_date:
+        exclusive_end = datetime.combine(
+            project.structural_tracking_end_date + timedelta(days=1),
+            time.min,
         )
-    )
+        query = query.where(Capture.captured_at < exclusive_end)
+    return list(db.scalars(query.order_by(Capture.captured_at.desc())))
 
 
 @router.post(
@@ -1890,18 +2029,31 @@ def create_capture(
         user_id=user.id,
         allowed_roles={"admin", "reviewer"},
     )
+    project = db.get(Project, project_id)
     media = db.get(MediaFile, payload.source_video_id)
     floor = db.get(Floor, payload.start_floor_id)
     if (
-        media is None
+        project is None
+        or media is None
         or media.project_id != project_id
         or media.media_kind != "VIDEO"
         or floor is None
         or floor.project_id != project_id
     ):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="วิดีโอหรือชั้นเริ่มต้นไม่อยู่ในโครงการนี้",
+        )
+    if (
+        project.structural_tracking_end_date
+        and payload.captured_at.date() > project.structural_tracking_end_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                "วันที่ Capture อยู่นอกช่วงติดตามงานโครงสร้าง "
+                f"ซึ่งสิ้นสุดวันที่ {project.structural_tracking_end_date.isoformat()}"
+            ),
         )
     existing = db.scalar(select(Capture.id).where(Capture.source_video_id == media.id))
     if existing is not None:
