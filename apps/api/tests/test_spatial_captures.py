@@ -262,6 +262,43 @@ def test_authoritative_visibility_does_not_jump_across_a_distant_turn() -> None:
     )
 
 
+def test_generated_visibility_graph_expands_straight_walk_without_manual_portals() -> None:
+    """A stale nearest-neighbour graph must not reduce an automatic tour to 2 rings."""
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    ids = [uuid.uuid4() for _ in range(5)]
+    rows = [
+        (
+            SimpleNamespace(
+                id=frame_id,
+                capture_id=uuid.uuid4(),
+                quality_status="USABLE",
+                is_warp_point=True,
+            ),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=Decimal("0"),
+                visual_x=Decimal(index),
+                visual_y=Decimal("0"),
+                visual_heading_deg=Decimal("0"),
+                # This mimics an old generated graph that contains only an
+                # arbitrary spatial target.  It is not an imported reference.
+                visibility_target_ids=(f'["{ids[-1]}"]' if index == 0 else "[]"),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+            ),
+        )
+        for index, frame_id in enumerate(ids)
+    ]
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+
+    assert {
+        item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[0]
+    } == {ids[1], ids[2], ids[3]}
+
+
 def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift() -> None:
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()

@@ -95,6 +95,12 @@ ROUTE_VECTOR_MAX_STEP_FACTOR = 4.0
 ROUTE_VECTOR_VISIBLE_LOOKAHEAD = 6
 ROUTE_VECTOR_MAX_VISIBLE_DISTANCE_FACTOR = 8.0
 ROUTE_VECTOR_MIN_STRAIGHTNESS = 0.82
+# A visual tour should offer more than one ring in a straight observed walk,
+# but never guess that a destination around a corner is visible.  Three sparse
+# stations in each direction is enough to feel like a spatial tour while
+# remaining conservative when a lightweight SLAM map has no wall mesh.
+ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 3
+ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS = 0.93
 EVALUATION_REQUIRED_POINT_COUNT = 20
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
 PORTAL_CAMERA_HEIGHT_M = 1.65
@@ -378,6 +384,116 @@ def _build_route_vectors(
                 return False
             return direct / max(cumulative, 1e-8) >= ROUTE_VECTOR_MIN_STRAIGHTNESS
 
+        # A generated graph from a lightweight SLAM reconstruction used to be
+        # a list of geometrically-nearest stations.  That can join two sides
+        # of a wall.  The subsequent safety repair therefore exposed only one
+        # previous and one next station, which made an otherwise valid upload
+        # feel unlike a Preimage/OpenSpace walk.  Rebuild the non-imported
+        # graph from the recorded order instead: expose up to three stations
+        # in either direction only while their *own visual track* is almost
+        # straight.  At a turn it automatically falls back to the immediate
+        # neighbours, so no operator needs to author portals by hand.
+        if not is_protected_reference:
+            for source_index, (source_frame, source) in enumerate(tour_frames):
+                for target_index in range(
+                    max(0, source_index - ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS),
+                    min(
+                        len(tour_frames),
+                        source_index + ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS + 1,
+                    ),
+                ):
+                    if source_index == target_index:
+                        continue
+                    target_frame, target = tour_frames[target_index]
+                    if (
+                        source.floor_id != target.floor_id
+                        or source.localization_run_id != target.localization_run_id
+                        or min(float(source.confidence), float(target.confidence))
+                        < ROUTE_VECTOR_MIN_CONFIDENCE
+                    ):
+                        continue
+                    left, right = sorted((source_index, target_index))
+                    segment_poses = [
+                        pose for _frame, pose in tour_frames[left : right + 1]
+                    ]
+                    steps = [
+                        pose_distance(first, second)
+                        for first, second in zip(
+                            segment_poses, segment_poses[1:], strict=False
+                        )
+                    ]
+                    cumulative = sum(steps)
+                    direct = pose_distance(segment_poses[0], segment_poses[-1])
+                    if not all(value < float("inf") for value in (cumulative, direct)):
+                        continue
+                    separation = right - left
+                    # The next physical panorama is always a safe, observed
+                    # step.  Longer links require a genuinely straight visual
+                    # trajectory; this rejects turns and U-shapes rather than
+                    # presenting a ring through a wall.
+                    if separation == 1 or (
+                        cumulative > 1e-8
+                        and direct / cumulative
+                        >= ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS
+                    ):
+                        links.add((source_frame.id, target_frame.id))
+        else:
+            # The protected reference contains an imported, externally
+            # validated visibility graph.  Preserve it byte-for-byte.
+            for source_frame, source in tour_frames:
+                compatible_sources = [
+                    item
+                    for item in graph_sources
+                    if item[1].floor_id == source.floor_id
+                    and item[1].localization_run_id == source.localization_run_id
+                ]
+                if not compatible_sources:
+                    continue
+                donor = source
+                if getattr(source, "visibility_target_ids", None) is None:
+                    _donor_frame, donor = min(
+                        compatible_sources,
+                        key=lambda item: (
+                            pose_distance(source, item[1]),
+                            abs(
+                                getattr(item[0], "timestamp_ms", 0)
+                                - getattr(source_frame, "timestamp_ms", 0)
+                            ),
+                        ),
+                    )
+                try:
+                    donor_target_ids = json.loads(donor.visibility_target_ids or "[]")
+                except (TypeError, ValueError):
+                    continue
+                for raw_target_id in donor_target_ids:
+                    target_item = frames_by_id.get(str(raw_target_id))
+                    if target_item is None:
+                        continue
+                    target_frame, target = target_item
+                    compatible_stations = [
+                        item
+                        for item in tour_frames
+                        if item[1].floor_id == target.floor_id
+                        and item[1].localization_run_id == target.localization_run_id
+                    ]
+                    if not compatible_stations:
+                        continue
+                    mapped_target_id = min(
+                        compatible_stations,
+                        key=lambda item: (
+                            pose_distance(target, item[1]),
+                            abs(
+                                getattr(item[0], "timestamp_ms", 0)
+                                - getattr(target_frame, "timestamp_ms", 0)
+                            ),
+                        ),
+                    )[0].id
+                    if (
+                        mapped_target_id != source_frame.id
+                        and is_safe_station_link(source_frame.id, mapped_target_id)
+                    ):
+                        links.add((source_frame.id, mapped_target_id))
+
         # A capture can be re-sampled into a new set of sparse tour stations
         # after its authoritative mesh graph was generated. Resolve both ends
         # of every visible edge onto those current stations. Rendering a portal
@@ -385,7 +501,7 @@ def _build_route_vectors(
         # after the click is precisely the mismatch the user sees as an
         # inaccurate warp. This projection is read-only and never rewrites the
         # protected poses, station flags or reconstruction.
-        for source_frame, source in tour_frames:
+        for source_frame, source in ([] if not is_protected_reference else tour_frames):
             compatible_sources = [
                 item
                 for item in graph_sources
