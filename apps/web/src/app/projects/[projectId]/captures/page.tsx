@@ -30,6 +30,7 @@ export default async function CapturesPage({ params }: { params: Promise<{ proje
             <Link href={`/projects/${projectId}/schedule`}>แผนงานและ Progress</Link>
             <Link className="is-active" href={`/projects/${projectId}/captures`}>Captures</Link>
             <Link href={`/projects/${projectId}/dashboard`}>Dashboard</Link>
+            <Link href={`/projects/${projectId}/reports/daily`}>รายงานประจำวัน</Link>
             <Link href={`/projects/${projectId}/members`}>สมาชิก</Link>
             <Link href={`/projects/${projectId}/settings`}>ตั้งค่าโครงการ</Link>
           </nav>

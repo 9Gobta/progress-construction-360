@@ -31,6 +31,7 @@ export default async function DashboardPage({ params, searchParams }: { params: 
     <aside className="sidebar"><p className="sidebar-label">{project.name}</p><nav>
       <Link href="/projects">← โครงการทั้งหมด</Link><Link href={`/projects/${projectId}/schedule`}>แผนงานและ Progress</Link>
       <Link href={`/projects/${projectId}/captures`}>Captures 360°</Link><Link className="is-active" href={`/projects/${projectId}/dashboard`}>Dashboard</Link>
+      <Link href={`/projects/${projectId}/reports/daily${captureId ? `?captureId=${captureId}` : ""}`}>รายงานประจำวัน</Link>
       <Link href={`/projects/${projectId}/members`}>สมาชิก</Link><Link href={`/projects/${projectId}/settings`}>ตั้งค่าโครงการ</Link>
     </nav></aside>
     <main className="workspace-main">
