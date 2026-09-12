@@ -105,8 +105,8 @@ ROUTE_VECTOR_MIN_STRAIGHTNESS = 0.82
 # ring in each direction (the 21/12 capture is the clearest example). Expose a
 # wider local corridor like the accepted reference while still rejecting an
 # abrupt 90-degree turn through a wall.
-ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 6
-ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS = 0.75
+ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 10
+ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS = 0.60
 EVALUATION_REQUIRED_POINT_COUNT = 20
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
 PORTAL_CAMERA_HEIGHT_M = 1.65
@@ -246,42 +246,12 @@ def _build_route_vectors(
         getattr(keyframe, "capture_id", None) == PROTECTED_REFERENCE_CAPTURE_ID
         for keyframe, _pose in all_frames
     )
-    # A successful spatial reconstruction already contains the information
-    # needed to decide which panoramas can be seen from one another.  Treat it
-    # like an imported visibility graph instead of replacing it with a small
-    # chronological neighbourhood.  The latter was the reason the 21/12 tour
-    # exposed only 2-5 rings even though its reconstruction stored 20 visible
-    # targets per station.
-    spatial_graph_poses = [
-        pose
-        for _keyframe, pose in all_frames
-        if getattr(pose, "visibility_target_ids", None) is not None
-    ]
-
-    def has_complete_spatial_pose(pose: CameraPose) -> bool:
-        return (
-            "pycolmap-spatial" in str(getattr(pose, "algorithm", ""))
-            and all(
-                getattr(pose, field, None) is not None
-                for field in (
-                    "visual_x",
-                    "visual_y",
-                    "visual_z",
-                    "visual_ground_z",
-                    "orientation_qx",
-                    "orientation_qy",
-                    "orientation_qz",
-                    "orientation_qw",
-                )
-            )
-        )
-
-    has_trusted_spatial_visibility = bool(spatial_graph_poses) and all(
-        has_complete_spatial_pose(pose) for pose in spatial_graph_poses
-    )
-    use_stored_visibility_graph = (
-        is_protected_reference or has_trusted_spatial_visibility
-    )
+    # Only the imported 20/12 reference has an externally validated
+    # occlusion/visibility graph. A pycolmap trajectory supplies accurate
+    # camera directions, but its stored candidate list is proximity-only and
+    # must not be treated as mesh raycasting: doing so painted portals across
+    # the excavation and behind obstructions on 21/12.
+    use_stored_visibility_graph = is_protected_reference
     # An imported mesh visibility graph may legitimately target an in-between
     # panorama that is not one of the sparse map/timeline stations. Keep every
     # graph node available here; filtering first silently discarded approved
@@ -600,14 +570,6 @@ def _build_route_vectors(
                 ):
                     links.add((source_frame.id, mapped_target_id))
 
-        # A reconstructed visibility graph may be asymmetric because one
-        # panorama passed the feature/mesh threshold while the reverse sample
-        # narrowly missed it.  A virtual-tour move still needs a deterministic
-        # way back to the exact station it came from; otherwise the return ring
-        # disappears or the viewer falls back to a different neighbour.
-        if has_trusted_spatial_visibility and not is_protected_reference:
-            links.update((target_id, source_id) for source_id, target_id in list(links))
-
     by_id = {keyframe.id: pose for keyframe, pose in frames}
     result: list[RouteVectorRead] = []
     for source_id, target_id in sorted(links, key=lambda pair: (str(pair[0]), str(pair[1]))):
@@ -731,6 +693,8 @@ def _build_route_vectors(
                 verified=True,
                 verification_method=(
                     "full-6dof-equirectangular+triangle-mesh-raycast"
+                    if has_full_pose and use_stored_visibility_graph
+                    else "full-6dof-observed-trajectory-corridor"
                     if has_full_pose
                     else "shared-visual-slam-track+dense-tour-adjacency"
                 ),

@@ -388,13 +388,17 @@ def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift()
     assert forward.delta_z == pytest.approx(-1.30)
 
 
-def test_complete_spatial_graph_keeps_all_visible_portals() -> None:
-    """A reconstructed tour must not be reduced to chronological neighbours."""
+def test_complete_spatial_pose_does_not_trust_proximity_as_mesh_visibility() -> None:
+    """Full camera poses do not make a nearest-neighbour list occlusion-safe."""
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()
     ids = [uuid.uuid4() for _ in range(9)]
+    points = [
+        (0, 0), (1, 0), (2, 0), (3, 0), (3, 1),
+        (2, 1), (1, 1), (0, 1), (-1, 1),
+    ]
     rows = []
-    for index, frame_id in enumerate(ids):
+    for index, (frame_id, (x, y)) in enumerate(zip(ids, points, strict=True)):
         rows.append((
             SimpleNamespace(
                 id=frame_id,
@@ -406,8 +410,8 @@ def test_complete_spatial_graph_keeps_all_visible_portals() -> None:
             SimpleNamespace(
                 floor_id=floor_id,
                 relative_z_m=Decimal("0"),
-                visual_x=Decimal(index),
-                visual_y=Decimal("0"),
+                visual_x=Decimal(x),
+                visual_y=Decimal(y),
                 visual_z=Decimal("1.65"),
                 visual_ground_z=Decimal("0"),
                 visual_heading_deg=Decimal("0"),
@@ -428,11 +432,17 @@ def test_complete_spatial_graph_keeps_all_visible_portals() -> None:
 
     vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
 
-    assert {
+    targets = {
         item.to_keyframe_id
         for item in vectors
         if item.from_keyframe_id == ids[0]
-    } == set(ids[1:])
+    }
+    assert ids[1] in targets
+    assert ids[-1] not in targets
+    assert all(
+        item.verification_method == "full-6dof-observed-trajectory-corridor"
+        for item in vectors
+    )
     assert all(
         any(
             reverse.from_keyframe_id == item.to_keyframe_id
