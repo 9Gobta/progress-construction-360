@@ -32,8 +32,25 @@ try {
         $localStdoutLog = Join-Path $logDirectory "local-start-$stamp.stdout.log"
         $localStderrLog = Join-Path $logDirectory "local-start-$stamp.stderr.log"
         $localLauncher = Join-Path $PSScriptRoot "start_local_dev.ps1"
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $localLauncher -NoBrowser 1> $localStdoutLog 2> $localStderrLog
-        $localExitCode = $LASTEXITCODE
+        # This script is launched by a hidden scheduled task. Start the child in
+        # an explicitly hidden window as well; otherwise Windows Terminal can
+        # briefly appear every time the five-minute health check runs.
+        $localProcess = Start-Process `
+            -FilePath "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+            -ArgumentList @(
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-WindowStyle", "Hidden",
+                "-File", "`"$localLauncher`"",
+                "-NoBrowser"
+            ) `
+            -WorkingDirectory $workspace `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $localStdoutLog `
+            -RedirectStandardError $localStderrLog `
+            -Wait `
+            -PassThru
+        $localExitCode = $localProcess.ExitCode
         if ($localExitCode -ne 0) {
             $failure = Get-Content -LiteralPath $localStderrLog -Raw -ErrorAction SilentlyContinue
             throw "Local services failed to start (exit $localExitCode). $($failure.Trim())"
