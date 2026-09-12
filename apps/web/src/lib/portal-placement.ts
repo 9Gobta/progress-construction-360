@@ -9,6 +9,26 @@ export type GroundPortalPlacement = {
   pitchDeg: number;
 };
 
+function normalizedAngle(angle: number) {
+  return ((angle + 180) % 360 + 360) % 360 - 180;
+}
+
+export function reciprocalPortalViewLongitude({
+  sourceViewLongitude,
+  sourcePortalYaw,
+  targetReturnPortalYaw,
+}: {
+  sourceViewLongitude: number;
+  sourcePortalYaw: number;
+  targetReturnPortalYaw: number;
+}) {
+  // Preserve the viewer's offset from the selected portal using the reciprocal
+  // route itself. This avoids accumulating per-station heading approximation
+  // errors when a reviewer repeatedly travels away and back through a tour.
+  const portalOffset = normalizedAngle(sourceViewLongitude - sourcePortalYaw);
+  return normalizedAngle(targetReturnPortalYaw + 180 + portalOffset);
+}
+
 export function groundPortalPlacement({
   distance,
   localYawDeg,

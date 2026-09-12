@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { groundPortalPlacement } from "../src/lib/portal-placement.ts";
+import {
+  groundPortalPlacement,
+  reciprocalPortalViewLongitude,
+} from "../src/lib/portal-placement.ts";
 
 test("calibrates a floor portal from reconstructed camera height", () => {
   const placement = groundPortalPlacement({
@@ -42,4 +45,21 @@ test("falls back to the local walking cadence for a legacy trajectory", () => {
 
   assert.equal(placement.horizontalDistance, 36);
   assert.equal(placement.y, -180);
+});
+
+test("preserves the exact portal-relative view across reciprocal stations", () => {
+  const sourceViewLongitude = -150;
+  const sourcePortalYaw = -168;
+  const targetReturnPortalYaw = 11;
+  const targetLongitude = reciprocalPortalViewLongitude({
+    sourceViewLongitude,
+    sourcePortalYaw,
+    targetReturnPortalYaw,
+  });
+
+  assert.equal(targetLongitude, -151);
+  assert.equal(
+    ((targetLongitude - (targetReturnPortalYaw + 180) + 180) % 360 + 360) % 360 - 180,
+    18,
+  );
 });

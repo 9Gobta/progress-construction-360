@@ -14,7 +14,10 @@ import {
 } from "react";
 import * as THREE from "three";
 
-import { groundPortalPlacement } from "@/lib/portal-placement";
+import {
+  groundPortalPlacement,
+  reciprocalPortalViewLongitude,
+} from "@/lib/portal-placement";
 import type { CaptureDetail, Floor, FloorPlanInfo } from "@/lib/types";
 
 type Keyframe = CaptureDetail["keyframes"][number];
@@ -601,10 +604,16 @@ export function PanoramaViewer({
     `/api/projects/${projectId}/captures/${detail.capture.id}/keyframes/${frame.id}/image`
   ), [detail.capture.id, projectId]);
 
-  const selectKeyframe = useCallback((frame: Keyframe, preferredWorldHeading?: number) => {
+  const selectKeyframe = useCallback((
+    frame: Keyframe,
+    preferredWorldHeading?: number,
+    preferredLocalLongitude?: number,
+  ) => {
     if (frame.id === selected?.id) {
-      if (preferredWorldHeading !== undefined && frame.pose) {
-        viewRef.current.longitude = normalizedAngle(preferredWorldHeading - visualHeading(frame));
+      if (preferredLocalLongitude !== undefined || (preferredWorldHeading !== undefined && frame.pose)) {
+        viewRef.current.longitude = preferredLocalLongitude !== undefined
+          ? normalizedAngle(preferredLocalLongitude)
+          : normalizedAngle(preferredWorldHeading! - visualHeading(frame));
         panoramaRuntimeRef.current?.setView(
           viewRef.current.longitude,
           viewRef.current.latitude,
@@ -646,7 +655,9 @@ export function PanoramaViewer({
         // different next portal made a correct station look like the click had
         // landed somewhere else. Automatic portal framing remains a fallback
         // for keyboard/external navigation only.
-        if (preferredWorldHeading !== undefined) {
+        if (preferredLocalLongitude !== undefined) {
+          viewRef.current.longitude = normalizedAngle(preferredLocalLongitude);
+        } else if (preferredWorldHeading !== undefined) {
           viewRef.current.longitude = normalizedAngle(
             preferredWorldHeading - visualHeading(frame),
           );
@@ -733,16 +744,18 @@ export function PanoramaViewer({
 
   const selectedFrameRef = useRef(selected);
   const activeRouteVectorsRef = useRef(activeRouteVectors);
+  const routeVectorsRef = useRef(detail.route_vectors);
   const medianRouteDistanceRef = useRef(medianRouteDistance);
   const selectKeyframeRef = useRef(selectKeyframe);
   const onViewStateChangeRef = useRef(onViewStateChange);
   useEffect(() => {
     selectedFrameRef.current = selected;
     activeRouteVectorsRef.current = activeRouteVectors;
+    routeVectorsRef.current = detail.route_vectors;
     medianRouteDistanceRef.current = medianRouteDistance;
     selectKeyframeRef.current = selectKeyframe;
     onViewStateChangeRef.current = onViewStateChange;
-  }, [activeRouteVectors, medianRouteDistance, onViewStateChange, selectKeyframe, selected]);
+  }, [activeRouteVectors, detail.route_vectors, medianRouteDistance, onViewStateChange, selectKeyframe, selected]);
 
   useEffect(() => {
     if (initialPortalViewAppliedRef.current || !activeRouteVectors.length) return;
@@ -940,10 +953,35 @@ export function PanoramaViewer({
       );
       camera.updateMatrixWorld();
       portalRaycaster.setFromCamera(portalPointer, camera);
-      // True mesh intersections remove the screen-space ambiguity of
-      // overlapping annuli. Three sorts hits nearest-first, matching what the
-      // user sees in the panorama.
-      return portalRaycaster.intersectObjects(hotspotMeshes, false)[0];
+      // Prefer the annulus the reviewer can actually see. The larger invisible
+      // touch discs of nearby portals can overlap a farther visible ring; using
+      // Three's nearest ray hit alone then warps to a different station than
+      // the one that was clicked.
+      const visibleHits = portalRaycaster.intersectObjects(
+        hotspotMeshes.filter((mesh) => !mesh.userData.isPortalHitTarget),
+        false,
+      );
+      if (visibleHits[0]) return visibleHits[0];
+      const forgivingHits = portalRaycaster.intersectObjects(
+        hotspotMeshes.filter((mesh) => mesh.userData.isPortalHitTarget),
+        false,
+      );
+      if (forgivingHits.length <= 1) return forgivingHits[0];
+      // When touch targets overlap, choose the portal whose projected centre
+      // is closest to the pointer rather than whichever disc is nearest in 3D.
+      return forgivingHits.sort((first, second) => {
+        const firstCentre = first.object.position.clone().project(camera);
+        const secondCentre = second.object.position.clone().project(camera);
+        const firstScreenDistance = (
+          (firstCentre.x - portalPointer.x) ** 2
+          + (firstCentre.y - portalPointer.y) ** 2
+        );
+        const secondScreenDistance = (
+          (secondCentre.x - portalPointer.x) ** 2
+          + (secondCentre.y - portalPointer.y) ** 2
+        );
+        return firstScreenDistance - secondScreenDistance;
+      })[0];
     };
 
     const resize = () => {
@@ -972,9 +1010,11 @@ export function PanoramaViewer({
     };
     const pointerMove = (event: PointerEvent) => {
       if (!dragging) {
-        container.style.cursor = portalHitAt(event.clientX, event.clientY)
-          ? "pointer"
-          : "grab";
+        const hoverHit = portalHitAt(event.clientX, event.clientY);
+        container.style.cursor = hoverHit ? "pointer" : "grab";
+        container.dataset.hoverWarpTarget = (
+          hoverHit?.object.userData.targetId as string | undefined
+        ) ?? "";
         return;
       }
       event.preventDefault();
@@ -1005,6 +1045,19 @@ export function PanoramaViewer({
       const targetWorldHeading = sourceFrame?.pose
         ? visualHeading(sourceFrame) + longitude
         : longitude;
+      const returnRoute = routeVectorsRef.current.find((route) => (
+        route.from_keyframe_id === target.id
+        && route.to_keyframe_id === sourceFrame?.id
+        && isUsableTourRoute(route)
+      ));
+      const exactTargetLongitude = selectedRoute.direction_source === "full-6dof-mesh"
+        && returnRoute?.direction_source === "full-6dof-mesh"
+        ? reciprocalPortalViewLongitude({
+          sourceViewLongitude: longitude,
+          sourcePortalYaw: selectedRoute.local_yaw_deg,
+          targetReturnPortalYaw: returnRoute.local_yaw_deg,
+        })
+        : undefined;
       // Full 6DoF tours have a stable world orientation, so preserving the
       // clicked heading produces the reference-tour behaviour. Stella's
       // monocular heading can drift between stations; carrying that angle to
@@ -1017,6 +1070,7 @@ export function PanoramaViewer({
           || target.pose?.algorithm.startsWith("stella-vslam-")
           ? undefined
           : targetWorldHeading,
+        exactTargetLongitude,
       );
     };
     const wheel = (event: WheelEvent) => {
@@ -1359,6 +1413,7 @@ export function PanoramaViewer({
       hotspot.scale.setScalar(placement.radius);
       hotspot.renderOrder = 3;
       hotspot.userData.targetId = route.to_keyframe_id;
+      hotspot.userData.isPortalHitTarget = false;
       runtime.hotspotMeshes.push(hotspot);
       runtime.scene.add(hotspot);
 
@@ -1370,6 +1425,7 @@ export function PanoramaViewer({
       hitTarget.rotation.x = -Math.PI / 2;
       hitTarget.scale.setScalar(placement.radius);
       hitTarget.userData.targetId = route.to_keyframe_id;
+      hitTarget.userData.isPortalHitTarget = true;
       runtime.hotspotMeshes.push(hitTarget);
       runtime.scene.add(hitTarget);
 
