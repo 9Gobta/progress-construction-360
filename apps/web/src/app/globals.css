@@ -314,8 +314,10 @@ a { color: inherit; text-decoration: none; }
 .viewer-main { position: relative; min-width: 0; }
 .viewer-main > video { display: none; }
 .panorama-canvas, .viewer-empty { position: absolute; inset: 0; }
-.panorama-fallback-image { z-index: 0; object-fit: cover; }
-.panorama-canvas canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; cursor: grab; }
+.panorama-canvas { cursor: grab; touch-action: none; user-select: none; }
+.panorama-canvas:active { cursor: grabbing; }
+.panorama-fallback-image { position: absolute; z-index: 0; inset: 0; background-position: center; background-repeat: repeat-x; background-size: cover; pointer-events: none; }
+.panorama-canvas canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; cursor: inherit; touch-action: none; }
 .panorama-canvas canvas:active { cursor: grabbing; }
 .panorama-compatibility-note { position: absolute; z-index: 2; left: 50%; bottom: 72px; translate: -50% 0; max-width: min(90%, 520px); padding: 8px 12px; border-radius: 999px; background: rgb(8 29 21 / 88%); color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
 .viewer-empty { display: grid; place-items: center; color: rgba(255,255,255,.65); }

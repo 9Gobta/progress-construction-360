@@ -48,6 +48,25 @@ export type PanoramaViewState = {
   fov: number;
 };
 
+function positionFallbackPanorama(
+  container: HTMLElement,
+  fallback: HTMLElement | null,
+  view: PanoramaViewState,
+) {
+  if (!fallback) return;
+  const width = Math.max(container.clientWidth, 1);
+  const height = Math.max(container.clientHeight, 1);
+  const fov = Math.max(35, Math.min(95, view.fov));
+  const panoramaWidth = width * (360 / fov);
+  const panoramaHeight = panoramaWidth / 2;
+  const longitude = ((view.longitude + 180) % 360 + 360) % 360 - 180;
+  const backgroundX = width / 2 - panoramaWidth / 2 - (longitude / 360) * panoramaWidth;
+  const panoramaY = ((90 - view.latitude) / 180) * panoramaHeight;
+  const backgroundY = height / 2 - panoramaY;
+  fallback.style.backgroundSize = `${panoramaWidth}px ${panoramaHeight}px`;
+  fallback.style.backgroundPosition = `${backgroundX}px ${backgroundY}px`;
+}
+
 type RigidTransform = {
   scaleX: number;
   scaleY: number;
@@ -311,6 +330,7 @@ export function PanoramaViewer({
   const router = useRouter();
   const initialTourFrames = tourFrames(detail);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fallbackPanoramaRef = useRef<HTMLDivElement>(null);
   const planFileInputRef = useRef<HTMLInputElement>(null);
   const viewConeRef = useRef<HTMLSpanElement>(null);
   const viewConePlanHeadingRef = useRef(0);
@@ -934,32 +954,45 @@ export function PanoramaViewer({
       camera.updateProjectionMatrix();
       renderRequested = true;
     };
+    const updateFallbackPanorama = () => positionFallbackPanorama(
+      container,
+      fallbackPanoramaRef.current,
+      { longitude, latitude, fov: camera.fov },
+    );
     const pointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      event.preventDefault();
       dragging = true;
       startX = event.clientX;
       startY = event.clientY;
       startLongitude = longitude;
       startLatitude = latitude;
       pointerMoved = false;
-      renderer.domElement.setPointerCapture(event.pointerId);
+      container.setPointerCapture(event.pointerId);
     };
     const pointerMove = (event: PointerEvent) => {
       if (!dragging) {
-        renderer.domElement.style.cursor = portalHitAt(event.clientX, event.clientY)
+        container.style.cursor = portalHitAt(event.clientX, event.clientY)
           ? "pointer"
           : "grab";
         return;
       }
+      event.preventDefault();
       if (Math.abs(event.clientX - startX) > 4 || Math.abs(event.clientY - startY) > 4) {
         pointerMoved = true;
       }
       longitude = startLongitude + (startX - event.clientX) * 0.12;
       latitude = startLatitude + (event.clientY - startY) * 0.12;
+      latitude = Math.max(-85, Math.min(85, latitude));
+      updateFallbackPanorama();
       renderRequested = true;
     };
     const pointerUp = (event: PointerEvent) => {
       dragging = false;
-      renderer.domElement.style.cursor = "grab";
+      container.style.cursor = "grab";
+      if (container.hasPointerCapture(event.pointerId)) {
+        container.releasePointerCapture(event.pointerId);
+      }
       if (pointerMoved || !hotspotMeshes.length) return;
       const hit = portalHitAt(event.clientX, event.clientY);
       const targetId = hit?.object.userData.targetId as string | undefined;
@@ -991,6 +1024,7 @@ export function PanoramaViewer({
       camera.fov = Math.min(95, Math.max(35, camera.fov + event.deltaY * 0.04));
       viewRef.current.fov = camera.fov;
       camera.updateProjectionMatrix();
+      updateFallbackPanorama();
       renderRequested = true;
     };
     const contextLost = (event: Event) => {
@@ -1010,6 +1044,7 @@ export function PanoramaViewer({
       }
       renderRequested = false;
       latitude = Math.max(-85, Math.min(85, latitude));
+      updateFallbackPanorama();
       viewRef.current.longitude = longitude;
       viewRef.current.latitude = latitude;
       if (viewConeRef.current && selectedFrameRef.current?.pose) {
@@ -1093,18 +1128,24 @@ export function PanoramaViewer({
       animation = requestAnimationFrame(render);
     };
     resize();
+    updateFallbackPanorama();
     window.addEventListener("resize", resize);
-    renderer.domElement.addEventListener("pointerdown", pointerDown);
-    renderer.domElement.addEventListener("pointermove", pointerMove);
-    renderer.domElement.addEventListener("pointerup", pointerUp);
-    renderer.domElement.addEventListener("pointercancel", pointerUp);
-    renderer.domElement.addEventListener("wheel", wheel, { passive: false });
+    container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointermove", pointerMove);
+    container.addEventListener("pointerup", pointerUp);
+    container.addEventListener("pointercancel", pointerUp);
+    container.addEventListener("wheel", wheel, { passive: false });
     renderer.domElement.addEventListener("webglcontextlost", contextLost);
     renderer.domElement.addEventListener("webglcontextrestored", contextRestored);
     render(performance.now());
     return () => {
       cancelAnimationFrame(animation);
       window.removeEventListener("resize", resize);
+      container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointermove", pointerMove);
+      container.removeEventListener("pointerup", pointerUp);
+      container.removeEventListener("pointercancel", pointerUp);
+      container.removeEventListener("wheel", wheel);
       renderer.domElement.removeEventListener("webglcontextlost", contextLost);
       renderer.domElement.removeEventListener("webglcontextrestored", contextRestored);
       panoramaRuntimeRef.current?.texture?.dispose();
@@ -1125,6 +1166,82 @@ export function PanoramaViewer({
   }, []);
 
   useEffect(() => {
+    // Install the software-viewer controls whenever Three.js could not create
+    // a runtime. Do not wait for the compatibility banner state: renderer
+    // creation fails inside an earlier effect, while that state update is
+    // asynchronous, and some browsers can otherwise miss this entire mount.
+    if (panoramaRuntimeRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+    let dragging = false;
+    let pointerId: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    let startLongitude = 0;
+    let startLatitude = 0;
+    const update = () => positionFallbackPanorama(
+      container,
+      fallbackPanoramaRef.current,
+      viewRef.current,
+    );
+    const emit = () => onViewStateChangeRef.current?.({ ...viewRef.current });
+    const pointerDown = (event: PointerEvent) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      event.preventDefault();
+      dragging = true;
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      startLongitude = viewRef.current.longitude;
+      startLatitude = viewRef.current.latitude;
+      container.setPointerCapture(event.pointerId);
+    };
+    const pointerMove = (event: PointerEvent) => {
+      if (!dragging || pointerId !== event.pointerId) return;
+      event.preventDefault();
+      viewRef.current.longitude = startLongitude + (startX - event.clientX) * 0.12;
+      viewRef.current.latitude = Math.max(
+        -85,
+        Math.min(85, startLatitude + (event.clientY - startY) * 0.12),
+      );
+      update();
+      emit();
+    };
+    const pointerUp = (event: PointerEvent) => {
+      if (pointerId !== event.pointerId) return;
+      dragging = false;
+      pointerId = null;
+      if (container.hasPointerCapture(event.pointerId)) {
+        container.releasePointerCapture(event.pointerId);
+      }
+    };
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      viewRef.current.fov = Math.max(
+        35,
+        Math.min(95, viewRef.current.fov + event.deltaY * 0.04),
+      );
+      update();
+      emit();
+    };
+    update();
+    window.addEventListener("resize", update);
+    container.addEventListener("pointerdown", pointerDown);
+    container.addEventListener("pointermove", pointerMove);
+    container.addEventListener("pointerup", pointerUp);
+    container.addEventListener("pointercancel", pointerUp);
+    container.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      window.removeEventListener("resize", update);
+      container.removeEventListener("pointerdown", pointerDown);
+      container.removeEventListener("pointermove", pointerMove);
+      container.removeEventListener("pointerup", pointerUp);
+      container.removeEventListener("pointercancel", pointerUp);
+      container.removeEventListener("wheel", wheel);
+    };
+  }, [selectedId, webglUnavailable]);
+
+  useEffect(() => {
     const runtime = panoramaRuntimeRef.current;
     const selectedFrame = selectedFrameRef.current;
     if (!runtime || !selectedFrame) return;
@@ -1132,7 +1249,28 @@ export function PanoramaViewer({
 
     const applyImage = (image: HTMLImageElement) => {
       if (cancelled || panoramaRuntimeRef.current !== runtime) return;
-      const nextTexture = new THREE.Texture(image);
+      // Some reviewer machines expose a 4096px WebGL texture limit while
+      // legacy captures contain 7680px panoramas. Uploading the original image
+      // produces a valid-looking canvas that stays black and cannot be used as
+      // a 360 viewer. Downscale only the GPU copy; the source evidence remains
+      // unchanged and the software fallback still uses the original image.
+      const maxTextureSize = Math.max(1, runtime.renderer.capabilities.maxTextureSize);
+      let textureSource: HTMLImageElement | HTMLCanvasElement = image;
+      if (image.naturalWidth > maxTextureSize || image.naturalHeight > maxTextureSize) {
+        const scale = Math.min(
+          maxTextureSize / image.naturalWidth,
+          maxTextureSize / image.naturalHeight,
+        );
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.floor(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.floor(image.naturalHeight * scale));
+        const context = canvas.getContext("2d");
+        if (context) {
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          textureSource = canvas;
+        }
+      }
+      const nextTexture = new THREE.Texture(textureSource);
       nextTexture.colorSpace = THREE.SRGBColorSpace;
       nextTexture.minFilter = THREE.LinearFilter;
       nextTexture.magFilter = THREE.LinearFilter;
@@ -1672,17 +1810,15 @@ export function PanoramaViewer({
     <div className="spatial-review openspace-viewer">
       <div className="viewer-main" data-route-count={activeRouteVectors.length} data-tour-station-id={selected?.id ?? ""}>
         {selected ? <div className="panorama-canvas" ref={containerRef}>
-          <Image
-            alt={`ภาพ 360 จุดที่ ${selected.frame_index + 1}`}
+          <div
+            aria-label={`ภาพ 360 จุดที่ ${selected.frame_index + 1}`}
             className="panorama-fallback-image"
-            fill
             key={selected.id}
-            priority
-            sizes="100vw"
-            src={keyframeImageUrl(selected)}
-            unoptimized
+            ref={fallbackPanoramaRef}
+            role="img"
+            style={{ backgroundImage: `url(${keyframeImageUrl(selected)})` }}
           />
-          {webglUnavailable && <span className="panorama-compatibility-note">กำลังแสดงภาพสำรอง — เปิด Hardware acceleration เพื่อหมุนภาพ 360°</span>}
+          {webglUnavailable && <span className="panorama-compatibility-note">กำลังแสดงโหมดสำรอง 360° — ลากภาพเพื่อหมุนและใช้ล้อเมาส์เพื่อซูมได้</span>}
         </div> : <div className="viewer-empty">ยังไม่มีภาพ 360 — รอการประมวลผลไฟล์ต้นทางให้เสร็จ</div>}
         {selected && <div className="virtual-tour-badge"><strong>Virtual Tour · จุด {selectedStationNumber}</strong><span>{activeRouteVectors.length} จุดที่เดินต่อได้จากตำแหน่งนี้ · {navigableFrames.length} จุดวาร์ปทั้งหมด</span></div>}
 
