@@ -1,7 +1,7 @@
 export const VIRTUAL_CAMERA_HEIGHT = 180;
-const PORTAL_RADIUS_SCALE = 0.09;
+const PORTAL_RADIUS_SCALE = 0.115;
 const PORTAL_MIN_RADIUS = 1.25;
-const PORTAL_MAX_RADIUS = 12;
+const PORTAL_MAX_RADIUS = 16;
 
 export type GroundPortalPlacement = {
   horizontalDistance: number;
@@ -35,11 +35,13 @@ export function reciprocalPortalViewLongitude({
 export function groundPortalPlacement({
   distance,
   localYawDeg,
+  localPitchDeg,
   reconstructedCameraHeight,
   fallbackStep,
 }: {
   distance: number;
   localYawDeg: number;
+  localPitchDeg?: number | null;
   reconstructedCameraHeight: number | null;
   fallbackStep: number;
 }): GroundPortalPlacement {
@@ -58,15 +60,31 @@ export function groundPortalPlacement({
   const safeDistance = Math.max(Number.isFinite(distance) ? distance : 0, 1e-8);
   const horizontalDistance = safeDistance * VIRTUAL_CAMERA_HEIGHT / safeHeight;
   const yaw = localYawDeg * Math.PI / 180;
+  const estimatedPitch = Math.atan2(-VIRTUAL_CAMERA_HEIGHT, horizontalDistance) * 180 / Math.PI;
+  // The API projects the destination through the source camera's complete
+  // pose. Keep that measured vertical ray instead of rebuilding it from a
+  // level-camera assumption; otherwise a rolled/pitched panorama paints a
+  // correct route on the wrong patch of ground. Floor portals remain below
+  // the horizon even when a noisy monocular pose reports a small positive
+  // pitch.
+  const hasMeasuredPitch = localPitchDeg !== null
+    && localPitchDeg !== undefined
+    && Number.isFinite(localPitchDeg);
+  const pitchDeg = hasMeasuredPitch
+    ? Math.max(-80, Math.min(-2, localPitchDeg))
+    : estimatedPitch;
+  const pitch = pitchDeg * Math.PI / 180;
   return {
     horizontalDistance,
     x: -Math.cos(yaw) * horizontalDistance,
-    y: -VIRTUAL_CAMERA_HEIGHT,
+    y: hasMeasuredPitch
+      ? Math.tan(pitch) * horizontalDistance
+      : -VIRTUAL_CAMERA_HEIGHT,
     z: -Math.sin(yaw) * horizontalDistance,
     radius: Math.min(
       PORTAL_MAX_RADIUS,
       Math.max(PORTAL_MIN_RADIUS, horizontalDistance * PORTAL_RADIUS_SCALE),
     ),
-    pitchDeg: Math.atan2(-VIRTUAL_CAMERA_HEIGHT, horizontalDistance) * 180 / Math.PI,
+    pitchDeg,
   };
 }

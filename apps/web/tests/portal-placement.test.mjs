@@ -19,7 +19,7 @@ test("calibrates a floor portal from reconstructed camera height", () => {
   assert.equal(placement.y, -180);
   assert.ok(Math.abs(placement.z) < 1e-8);
   assert.equal(placement.pitchDeg, -45);
-  assert.equal(placement.radius, 12);
+  assert.equal(placement.radius, 16);
 });
 
 test("keeps a nearby portal large enough to see and select", () => {
@@ -45,6 +45,32 @@ test("keeps the hotspot on the floor despite reconstructed vertical drift", () =
   assert.ok(Math.abs(placement.x) < 1e-8);
   assert.equal(placement.z, -360);
   assert.ok(placement.pitchDeg < 0);
+});
+
+test("uses the reconstructed camera ray for a pitched panorama", () => {
+  const placement = groundPortalPlacement({
+    distance: 1.65,
+    localYawDeg: 0,
+    localPitchDeg: -30,
+    reconstructedCameraHeight: 1.65,
+    fallbackStep: 0.2,
+  });
+
+  assert.equal(placement.pitchDeg, -30);
+  assert.ok(Math.abs(placement.y - Math.tan(-Math.PI / 6) * 180) < 1e-8);
+});
+
+test("keeps a noisy same-floor portal below the panorama horizon", () => {
+  const placement = groundPortalPlacement({
+    distance: 1.65,
+    localYawDeg: 0,
+    localPitchDeg: 8,
+    reconstructedCameraHeight: 1.65,
+    fallbackStep: 0.2,
+  });
+
+  assert.equal(placement.pitchDeg, -2);
+  assert.ok(placement.y < 0);
 });
 
 test("falls back to the local walking cadence for a legacy trajectory", () => {

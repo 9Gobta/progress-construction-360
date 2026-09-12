@@ -668,6 +668,7 @@ export function PanoramaViewer({
           const placement = groundPortalPlacement({
             distance: nextPortal.distance,
             localYawDeg: nextPortal.local_yaw_deg,
+            localPitchDeg: nextPortal.local_pitch_deg,
             reconstructedCameraHeight: cameraHeight,
             fallbackStep: medianRouteDistance,
           });
@@ -774,6 +775,7 @@ export function PanoramaViewer({
     const placement = groundPortalPlacement({
       distance: nearestForward.distance,
       localYawDeg: nearestForward.local_yaw_deg,
+      localPitchDeg: nearestForward.local_pitch_deg,
       reconstructedCameraHeight: cameraHeight,
       fallbackStep: medianRouteDistance,
     });
@@ -1395,6 +1397,7 @@ export function PanoramaViewer({
       const placement = groundPortalPlacement({
         distance: route.distance,
         localYawDeg: route.local_yaw_deg,
+        localPitchDeg: route.local_pitch_deg,
         reconstructedCameraHeight,
         fallbackStep: medianRouteDistanceRef.current,
       });
@@ -1403,13 +1406,24 @@ export function PanoramaViewer({
         placement.y,
         placement.z,
       );
+      // Keep every overlay inside the 500-unit panorama sphere and the
+      // camera's far plane. Uniformly scaling both its position and radius
+      // preserves the exact projected ray and apparent size, while preventing
+      // long routes from disappearing or floating beyond the panorama.
+      const portalSceneLimit = 440;
+      const sceneScale = Math.min(
+        1,
+        portalSceneLimit / Math.max(targetGround.length(), 1e-8),
+      );
+      targetGround.multiplyScalar(sceneScale);
+      const portalRadius = placement.radius * sceneScale;
       const hotspot = new THREE.Mesh(runtime.hotspotGeometry, runtime.hotspotMaterial);
       hotspot.position.copy(targetGround);
       // Full-pose routes already point at the reconstructed floor handle.
       // Face the annulus toward the source camera so pitch/roll cannot collapse
       // the target into an unclickable line in the panorama.
       hotspot.rotation.x = -Math.PI / 2;
-      hotspot.scale.setScalar(placement.radius);
+      hotspot.scale.setScalar(portalRadius);
       hotspot.renderOrder = 3;
       hotspot.userData.targetId = route.to_keyframe_id;
       hotspot.userData.isPortalHitTarget = false;
@@ -1422,7 +1436,7 @@ export function PanoramaViewer({
       );
       hitTarget.position.copy(targetGround);
       hitTarget.rotation.x = -Math.PI / 2;
-      hitTarget.scale.setScalar(placement.radius);
+      hitTarget.scale.setScalar(portalRadius);
       hitTarget.userData.targetId = route.to_keyframe_id;
       hitTarget.userData.isPortalHitTarget = true;
       runtime.hotspotMeshes.push(hitTarget);
