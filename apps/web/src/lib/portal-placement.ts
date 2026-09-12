@@ -1,4 +1,7 @@
 export const VIRTUAL_CAMERA_HEIGHT = 180;
+const PORTAL_RADIUS_SCALE = 0.09;
+const PORTAL_MIN_RADIUS = 1.25;
+const PORTAL_MAX_RADIUS = 12;
 
 export type GroundPortalPlacement = {
   horizontalDistance: number;
@@ -60,7 +63,10 @@ export function groundPortalPlacement({
     x: -Math.cos(yaw) * horizontalDistance,
     y: -VIRTUAL_CAMERA_HEIGHT,
     z: -Math.sin(yaw) * horizontalDistance,
-    radius: Math.min(10, Math.max(1, horizontalDistance * 0.075)),
+    radius: Math.min(
+      PORTAL_MAX_RADIUS,
+      Math.max(PORTAL_MIN_RADIUS, horizontalDistance * PORTAL_RADIUS_SCALE),
+    ),
     pitchDeg: Math.atan2(-VIRTUAL_CAMERA_HEIGHT, horizontalDistance) * 180 / Math.PI,
   };
 }

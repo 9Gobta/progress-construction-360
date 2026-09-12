@@ -1,3 +1,4 @@
+import json
 import uuid
 from decimal import Decimal
 from types import SimpleNamespace
@@ -296,7 +297,56 @@ def test_generated_visibility_graph_expands_straight_walk_without_manual_portals
 
     assert {
         item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[0]
-    } == {ids[1], ids[2], ids[3]}
+    } == {ids[1], ids[2], ids[3], ids[4]}
+
+
+def test_generated_visibility_graph_covers_a_gently_curving_walk() -> None:
+    """A real walkthrough bend should retain several visible forward portals."""
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    ids = [uuid.uuid4() for _ in range(8)]
+    points = [
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (1.9, -0.5),
+        (2.2, -1.5),
+        (2.35, -2.5),
+        (2.3, -3.5),
+        (1.6, -4.3),
+        (0.6, -4.7),
+    ]
+    rows = [
+        (
+            SimpleNamespace(
+                id=frame_id,
+                capture_id=uuid.uuid4(),
+                quality_status="USABLE",
+                is_warp_point=True,
+            ),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=Decimal("0"),
+                visual_x=Decimal(str(x)),
+                visual_y=Decimal(str(y)),
+                visual_heading_deg=Decimal("0"),
+                visibility_target_ids="[]",
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+            ),
+        )
+        for frame_id, (x, y) in zip(ids, points, strict=True)
+    ]
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+    second_targets = {
+        item.to_keyframe_id
+        for item in vectors
+        if item.from_keyframe_id == ids[1]
+    }
+
+    assert ids[0] in second_targets
+    assert set(ids[2:7]).issubset(second_targets)
 
 
 def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift() -> None:
@@ -336,6 +386,61 @@ def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift()
     forward = next(item for item in vectors if item.from_keyframe_id == ids[0])
 
     assert forward.delta_z == pytest.approx(-1.30)
+
+
+def test_complete_spatial_graph_keeps_all_visible_portals() -> None:
+    """A reconstructed tour must not be reduced to chronological neighbours."""
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    ids = [uuid.uuid4() for _ in range(9)]
+    rows = []
+    for index, frame_id in enumerate(ids):
+        rows.append((
+            SimpleNamespace(
+                id=frame_id,
+                capture_id=uuid.uuid4(),
+                quality_status="USABLE",
+                is_warp_point=True,
+            ),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=Decimal("0"),
+                visual_x=Decimal(index),
+                visual_y=Decimal("0"),
+                visual_z=Decimal("1.65"),
+                visual_ground_z=Decimal("0"),
+                visual_heading_deg=Decimal("0"),
+                orientation_qx=Decimal("0"),
+                orientation_qy=Decimal("0"),
+                orientation_qz=Decimal("0"),
+                orientation_qw=Decimal("1"),
+                visibility_target_ids=(
+                    json.dumps([str(target) for target in ids[1:]])
+                    if index == 0
+                    else "[]"
+                ),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+                algorithm="stella-vslam-visual-graph-v4+pycolmap-spatial-v1",
+            ),
+        ))
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+
+    assert {
+        item.to_keyframe_id
+        for item in vectors
+        if item.from_keyframe_id == ids[0]
+    } == set(ids[1:])
+    assert all(
+        any(
+            reverse.from_keyframe_id == item.to_keyframe_id
+            and reverse.to_keyframe_id == item.from_keyframe_id
+            for reverse in vectors
+        )
+        for item in vectors
+    )
 
 
 def test_route_vectors_expose_straight_visible_stations_without_crossing_turns() -> None:

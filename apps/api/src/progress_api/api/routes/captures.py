@@ -99,8 +99,14 @@ ROUTE_VECTOR_MIN_STRAIGHTNESS = 0.82
 # but never guess that a destination around a corner is visible.  Three sparse
 # stations in each direction is enough to feel like a spatial tour while
 # remaining conservative when a lightweight SLAM map has no wall mesh.
-ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 3
-ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS = 0.93
+# Legacy Stella captures have no trustworthy browser-side depth mesh, but their
+# ordered visual track is still continuous. Three neighbours and a near-perfect
+# straightness requirement reduced a gently curving walkthrough to only one
+# ring in each direction (the 21/12 capture is the clearest example). Expose a
+# wider local corridor like the accepted reference while still rejecting an
+# abrupt 90-degree turn through a wall.
+ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 6
+ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS = 0.75
 EVALUATION_REQUIRED_POINT_COUNT = 20
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
 PORTAL_CAMERA_HEIGHT_M = 1.65
@@ -240,6 +246,42 @@ def _build_route_vectors(
         getattr(keyframe, "capture_id", None) == PROTECTED_REFERENCE_CAPTURE_ID
         for keyframe, _pose in all_frames
     )
+    # A successful spatial reconstruction already contains the information
+    # needed to decide which panoramas can be seen from one another.  Treat it
+    # like an imported visibility graph instead of replacing it with a small
+    # chronological neighbourhood.  The latter was the reason the 21/12 tour
+    # exposed only 2-5 rings even though its reconstruction stored 20 visible
+    # targets per station.
+    spatial_graph_poses = [
+        pose
+        for _keyframe, pose in all_frames
+        if getattr(pose, "visibility_target_ids", None) is not None
+    ]
+
+    def has_complete_spatial_pose(pose: CameraPose) -> bool:
+        return (
+            "pycolmap-spatial" in str(getattr(pose, "algorithm", ""))
+            and all(
+                getattr(pose, field, None) is not None
+                for field in (
+                    "visual_x",
+                    "visual_y",
+                    "visual_z",
+                    "visual_ground_z",
+                    "orientation_qx",
+                    "orientation_qy",
+                    "orientation_qz",
+                    "orientation_qw",
+                )
+            )
+        )
+
+    has_trusted_spatial_visibility = bool(spatial_graph_poses) and all(
+        has_complete_spatial_pose(pose) for pose in spatial_graph_poses
+    )
+    use_stored_visibility_graph = (
+        is_protected_reference or has_trusted_spatial_visibility
+    )
     # An imported mesh visibility graph may legitimately target an in-between
     # panorama that is not one of the sparse map/timeline stations. Keep every
     # graph node available here; filtering first silently discarded approved
@@ -358,7 +400,7 @@ def _build_route_vectors(
 
         def is_safe_station_link(source_id: uuid.UUID, target_id: uuid.UUID) -> bool:
             """Reject graph links that jump through an unobserved wall or turn."""
-            if is_protected_reference:
+            if use_stored_visibility_graph:
                 return True
             source_index = station_index_by_id.get(source_id)
             target_index = station_index_by_id.get(target_id)
@@ -393,7 +435,7 @@ def _build_route_vectors(
         # in either direction only while their *own visual track* is almost
         # straight.  At a turn it automatically falls back to the immediate
         # neighbours, so no operator needs to author portals by hand.
-        if not is_protected_reference:
+        if not use_stored_visibility_graph:
             for source_index, (source_frame, source) in enumerate(tour_frames):
                 for target_index in range(
                     max(0, source_index - ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS),
@@ -438,8 +480,9 @@ def _build_route_vectors(
                     ):
                         links.add((source_frame.id, target_frame.id))
         else:
-            # The protected reference contains an imported, externally
-            # validated visibility graph.  Preserve it byte-for-byte.
+            # The protected reference and complete spatial reconstructions
+            # contain validated visibility graphs. Project their dense graph
+            # nodes onto the sparse panorama stations rendered by the client.
             for source_frame, source in tour_frames:
                 compatible_sources = [
                     item
@@ -501,7 +544,9 @@ def _build_route_vectors(
         # after the click is precisely the mismatch the user sees as an
         # inaccurate warp. This projection is read-only and never rewrites the
         # protected poses, station flags or reconstruction.
-        for source_frame, source in ([] if not is_protected_reference else tour_frames):
+        for source_frame, source in (
+            tour_frames if use_stored_visibility_graph else []
+        ):
             compatible_sources = [
                 item
                 for item in graph_sources
@@ -554,6 +599,14 @@ def _build_route_vectors(
                     and is_safe_station_link(source_frame.id, mapped_target_id)
                 ):
                     links.add((source_frame.id, mapped_target_id))
+
+        # A reconstructed visibility graph may be asymmetric because one
+        # panorama passed the feature/mesh threshold while the reverse sample
+        # narrowly missed it.  A virtual-tour move still needs a deterministic
+        # way back to the exact station it came from; otherwise the return ring
+        # disappears or the viewer falls back to a different neighbour.
+        if has_trusted_spatial_visibility and not is_protected_reference:
+            links.update((target_id, source_id) for source_id, target_id in list(links))
 
     by_id = {keyframe.id: pose for keyframe, pose in frames}
     result: list[RouteVectorRead] = []

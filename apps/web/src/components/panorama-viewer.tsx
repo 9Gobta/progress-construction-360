@@ -285,19 +285,12 @@ function tourFrames(detail: CaptureDetail) {
   );
   const connected = selected.filter((frame) => connectedIds.has(frame.id));
   // A spatial tour exposes one station per physical place. Legacy captures
-  // sometimes marked every half-second frame as a station, including long
-  // runs of identical coordinates. Those zero-distance frames cannot form a
-  // portal, so prefer graph-backed stations. Still retain the real first and
-  // last selected frames: localization may only have a connected route for a
-  // middle section of the clip, but opening a capture must never silently
-  // begin minutes into the source video.
+  // sometimes marked the stationary beginning of a video as several stations
+  // at exactly the same coordinates. Those zero-distance frames cannot form a
+  // portal. Starting on one leaves the viewer stranded, so when a connected
+  // graph exists only expose its real, navigable stations.
   if (connected.length >= 2) {
-    const boundaryFrames = [selected[0], selected[selected.length - 1]].filter(
-      (frame): frame is Keyframe => Boolean(frame),
-    );
-    return [...new Map(
-      [...boundaryFrames, ...connected].map((frame) => [frame.id, frame]),
-    ).values()].sort((first, second) => (
+    return connected.sort((first, second) => (
       first.timestamp_ms - second.timestamp_ms || first.id.localeCompare(second.id)
     ));
   }
@@ -632,21 +625,22 @@ export function PanoramaViewer({
       if (pendingKeyframeRef.current !== frame.id) return;
       preloadedImageRef.current = { keyframeId: frame.id, image };
       if (frame.pose) {
-        const isMetricSpatialTour = frame.pose.algorithm.includes("+pycolmap-spatial-v1");
-        const hasAuthoritativeSpatialTour = frame.pose.algorithm.startsWith("rig-pycolmap-");
-        const frameRoutes = isMetricSpatialTour || hasAuthoritativeSpatialTour
-          ? detail.route_vectors
-            .filter((route) => (
-              route.from_keyframe_id === frame.id
-              && isUsableTourRoute(route)
-            ))
-            .map((route) => ({
-              ...route,
-              target: detail.keyframes.find((candidate) => candidate.id === route.to_keyframe_id),
-            }))
-            .filter((route) => Boolean(route.target))
-            .sort((first, second) => first.distance - second.distance)
-          : [];
+        // Route vectors are already validated by the API for every capture.
+        // Older Stella captures do not carry the newer algorithm suffix, but
+        // they still have a real, reciprocal tour graph. Gating this list on
+        // the suffix left those dates facing an arbitrary heading after a
+        // warp, even though their destination station was correct.
+        const frameRoutes = detail.route_vectors
+          .filter((route) => (
+            route.from_keyframe_id === frame.id
+            && isUsableTourRoute(route)
+          ))
+          .map((route) => ({
+            ...route,
+            target: detail.keyframes.find((candidate) => candidate.id === route.to_keyframe_id),
+          }))
+          .filter((route) => Boolean(route.target))
+          .sort((first, second) => first.distance - second.distance);
         const nextPortal = frameRoutes.find((route) => (
           route.target!.timestamp_ms > frame.timestamp_ms
         )) ?? frameRoutes[0];
@@ -825,7 +819,9 @@ export function PanoramaViewer({
       frame.pose?.floor_id === requestedFrame.pose?.floor_id
     ));
     const candidates = sameFloorStations.length ? sameFloorStations : navigableFrames;
-    const requestedStation = requestedFrame.is_warp_point
+    const requestedIsNavigable = requestedFrame.is_warp_point
+      && navigableFrames.some((frame) => frame.id === requestedFrame.id);
+    const requestedStation = requestedIsNavigable
       ? requestedFrame
       : candidates.reduce<Keyframe | null>((nearest, frame) => (
         !nearest
@@ -876,9 +872,10 @@ export function PanoramaViewer({
     geometry.scale(-1, 1, 1);
     const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
     scene.add(new THREE.Mesh(geometry, material));
-    // Keep the portal close to Preimage's apparent size and give it a thicker
-    // stroke so it remains legible against a busy construction surface.
-    const hotspotGeometry = new THREE.RingGeometry(0.58, 1, 48);
+    // Keep the portal close to Preimage's apparent size and give it a thicker,
+    // slightly wider stroke so it remains legible against a busy construction
+    // surface at both near and far stations.
+    const hotspotGeometry = new THREE.RingGeometry(0.5, 1.08, 48);
     const hotspotMaterial = new THREE.MeshBasicMaterial({
       color: 0xe7efec,
       depthTest: false,
@@ -889,7 +886,7 @@ export function PanoramaViewer({
     const hotspotMeshes: THREE.Mesh[] = [];
     // The invisible disc is slightly wider than the visible ring. This makes
     // touch/click selection forgiving without moving the true 3D destination.
-    const hotspotHitGeometry = new THREE.CircleGeometry(1.22, 48);
+    const hotspotHitGeometry = new THREE.CircleGeometry(1.35, 48);
     const hotspotHitMaterial = new THREE.MeshBasicMaterial({
       colorWrite: false,
       depthTest: false,
@@ -1056,26 +1053,21 @@ export function PanoramaViewer({
         && route.to_keyframe_id === sourceFrame?.id
         && isUsableTourRoute(route)
       ));
-      const exactTargetLongitude = selectedRoute.direction_source === "full-6dof-mesh"
-        && returnRoute?.direction_source === "full-6dof-mesh"
+      const exactTargetLongitude = returnRoute
         ? reciprocalPortalViewLongitude({
           sourceViewLongitude: longitude,
           sourcePortalYaw: selectedRoute.local_yaw_deg,
           targetReturnPortalYaw: returnRoute.local_yaw_deg,
         })
         : undefined;
-      // Full 6DoF tours have a stable world orientation, so preserving the
-      // clicked heading produces the reference-tour behaviour. Stella's
-      // monocular heading can drift between stations; carrying that angle to
-      // the destination can put every next portal behind the camera and make
-      // a successful warp look stuck. Let the destination face its nearest
-      // forward route in that case, exactly as keyboard navigation does.
+      // Use the actual reciprocal edge for every tour type. This is local to
+      // the two stations and therefore remains stable even when a legacy
+      // Stella capture has accumulated global heading drift. Carrying a
+      // global heading (or auto-facing an unrelated next edge) is what made
+      // the return ring appear in a different place after travelling back.
       selectKeyframeRef.current(
         target,
-        selectedRoute.direction_source === "visual-slam-pose"
-          || target.pose?.algorithm.startsWith("stella-vslam-")
-          ? undefined
-          : targetWorldHeading,
+        exactTargetLongitude === undefined ? targetWorldHeading : undefined,
         exactTargetLongitude,
       );
     };

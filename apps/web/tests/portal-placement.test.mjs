@@ -19,6 +19,18 @@ test("calibrates a floor portal from reconstructed camera height", () => {
   assert.equal(placement.y, -180);
   assert.ok(Math.abs(placement.z) < 1e-8);
   assert.equal(placement.pitchDeg, -45);
+  assert.equal(placement.radius, 12);
+});
+
+test("keeps a nearby portal large enough to see and select", () => {
+  const placement = groundPortalPlacement({
+    distance: 0.01,
+    localYawDeg: 0,
+    reconstructedCameraHeight: null,
+    fallbackStep: 1,
+  });
+
+  assert.equal(placement.radius, 1.25);
 });
 
 test("keeps the hotspot on the floor despite reconstructed vertical drift", () => {
@@ -61,5 +73,21 @@ test("preserves the exact portal-relative view across reciprocal stations", () =
   assert.equal(
     ((targetLongitude - (targetReturnPortalYaw + 180) + 180) % 360 + 360) % 360 - 180,
     18,
+  );
+});
+
+test("preserves the return view when legacy station headings drift", () => {
+  const sourceViewLongitude = 37;
+  const sourcePortalYaw = 22;
+  const targetReturnPortalYaw = -131;
+  const targetLongitude = reciprocalPortalViewLongitude({
+    sourceViewLongitude,
+    sourcePortalYaw,
+    targetReturnPortalYaw,
+  });
+
+  assert.equal(
+    ((targetLongitude - (targetReturnPortalYaw + 180) + 180) % 360 + 360) % 360 - 180,
+    15,
   );
 });
