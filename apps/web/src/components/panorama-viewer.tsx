@@ -857,7 +857,10 @@ export function PanoramaViewer({
       // An alpha canvas lets the still-image fallback remain visible on
       // machines where WebGL creation/rendering silently fails. This happens
       // on some remote reviewers' browsers with GPU acceleration disabled.
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      // A panorama is already a continuous image; multisample antialiasing adds
+      // GPU memory/resolve work without improving the photo. Keeping it off is
+      // important when Revit and the browser share the same graphics adapter.
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
       renderer.setClearColor(0x000000, 0);
     } catch {
       window.setTimeout(() => setWebglUnavailable(true), 0);
@@ -867,7 +870,7 @@ export function PanoramaViewer({
     // render the panorama. A few Windows/browser combinations create a WebGL
     // context successfully but return a completely black framebuffer.
     renderer.domElement.style.visibility = "hidden";
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     container.appendChild(renderer.domElement);
     const geometry = new THREE.SphereGeometry(500, 60, 40);
     geometry.scale(-1, 1, 1);
@@ -905,6 +908,11 @@ export function PanoramaViewer({
     let longitude = viewRef.current.longitude;
     let latitude = viewRef.current.latitude;
     let renderRequested = true;
+    let animation = 0;
+    function requestRender() {
+      renderRequested = true;
+      if (!animation) animation = requestAnimationFrame(render);
+    }
     panoramaRuntimeRef.current = {
       scene,
       camera,
@@ -920,13 +928,13 @@ export function PanoramaViewer({
       routeGuideGeometries,
       routeGuideMeshes,
       routeGuideMaterial,
-      invalidate: () => { renderRequested = true; },
+      invalidate: requestRender,
       setView: (nextLongitude, nextLatitude, nextFov) => {
         longitude = nextLongitude;
         latitude = nextLatitude;
         camera.fov = nextFov;
         camera.updateProjectionMatrix();
-        renderRequested = true;
+        requestRender();
       },
     };
     let dragging = false;
@@ -935,8 +943,6 @@ export function PanoramaViewer({
     let startLongitude = 0;
     let startLatitude = 0;
     let pointerMoved = false;
-    let animation = 0;
-    let lastViewStateEmission = 0;
     let lastEmittedView = {
       longitude: Number.NaN,
       latitude: Number.NaN,
@@ -990,7 +996,7 @@ export function PanoramaViewer({
       renderer.setSize(width, height, false);
       camera.aspect = width / Math.max(height, 1);
       camera.updateProjectionMatrix();
-      renderRequested = true;
+      requestRender();
     };
     const updateFallbackPanorama = () => positionFallbackPanorama(
       container,
@@ -1025,7 +1031,7 @@ export function PanoramaViewer({
       latitude = startLatitude + (event.clientY - startY) * 0.12;
       latitude = Math.max(-85, Math.min(85, latitude));
       updateFallbackPanorama();
-      renderRequested = true;
+      requestRender();
     };
     const pointerUp = (event: PointerEvent) => {
       dragging = false;
@@ -1079,7 +1085,7 @@ export function PanoramaViewer({
       viewRef.current.fov = camera.fov;
       camera.updateProjectionMatrix();
       updateFallbackPanorama();
-      renderRequested = true;
+      requestRender();
     };
     const contextLost = (event: Event) => {
       event.preventDefault();
@@ -1089,13 +1095,11 @@ export function PanoramaViewer({
     const contextRestored = () => {
       renderer.domElement.style.visibility = "visible";
       setWebglUnavailable(false);
-      renderRequested = true;
+      requestRender();
     };
-    const render = (timestamp: number) => {
-      if (!renderRequested && !dragging) {
-        animation = requestAnimationFrame(render);
-        return;
-      }
+    function render() {
+      animation = 0;
+      if (!renderRequested) return;
       renderRequested = false;
       latitude = Math.max(-85, Math.min(85, latitude));
       updateFallbackPanorama();
@@ -1162,25 +1166,22 @@ export function PanoramaViewer({
             renderer.domElement.style.visibility = "hidden";
             setWebglUnavailable(true);
           } else {
-            renderRequested = true;
+            requestRender();
           }
         }
       }
-      if (timestamp - lastViewStateEmission >= 33) {
-        lastViewStateEmission = timestamp;
-        const viewChanged = (
-          !Number.isFinite(lastEmittedView.longitude)
-          || Math.abs(longitude - lastEmittedView.longitude) >= 0.01
-          || Math.abs(latitude - lastEmittedView.latitude) >= 0.01
-          || Math.abs(camera.fov - lastEmittedView.fov) >= 0.01
-        );
-        if (viewChanged) {
-          lastEmittedView = { longitude, latitude, fov: camera.fov };
-          onViewStateChangeRef.current?.(lastEmittedView);
-        }
+      const viewChanged = (
+        !Number.isFinite(lastEmittedView.longitude)
+        || Math.abs(longitude - lastEmittedView.longitude) >= 0.01
+        || Math.abs(latitude - lastEmittedView.latitude) >= 0.01
+        || Math.abs(camera.fov - lastEmittedView.fov) >= 0.01
+      );
+      if (viewChanged) {
+        lastEmittedView = { longitude, latitude, fov: camera.fov };
+        onViewStateChangeRef.current?.(lastEmittedView);
       }
-      animation = requestAnimationFrame(render);
-    };
+      if (renderRequested && !animation) animation = requestAnimationFrame(render);
+    }
     resize();
     updateFallbackPanorama();
     window.addEventListener("resize", resize);
@@ -1191,7 +1192,7 @@ export function PanoramaViewer({
     container.addEventListener("wheel", wheel, { passive: false });
     renderer.domElement.addEventListener("webglcontextlost", contextLost);
     renderer.domElement.addEventListener("webglcontextrestored", contextRestored);
-    render(performance.now());
+    requestRender();
     return () => {
       cancelAnimationFrame(animation);
       window.removeEventListener("resize", resize);
@@ -1308,7 +1309,13 @@ export function PanoramaViewer({
       // produces a valid-looking canvas that stays black and cannot be used as
       // a 360 viewer. Downscale only the GPU copy; the source evidence remains
       // unchanged and the software fallback still uses the original image.
-      const maxTextureSize = Math.max(1, runtime.renderer.capabilities.maxTextureSize);
+      // 4096×2048 is already above the visible detail of this review viewport
+      // and uses roughly one quarter of the GPU memory of a 7680×3840 upload.
+      // This prevents the web tour from competing with Revit for VRAM.
+      const maxTextureSize = Math.min(
+        4096,
+        Math.max(1, runtime.renderer.capabilities.maxTextureSize),
+      );
       let textureSource: HTMLImageElement | HTMLCanvasElement = image;
       if (image.naturalWidth > maxTextureSize || image.naturalHeight > maxTextureSize) {
         const scale = Math.min(
