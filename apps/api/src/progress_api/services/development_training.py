@@ -55,15 +55,24 @@ def calibrate_development_capture_from_ground_truth(
 
     linear = matrix[:, :2]
     translation = matrix[:, 2]
+    affine_predictions = predicted @ linear.T + translation
+    raw_mean_error = float(np.linalg.norm(predicted - targets, axis=1).mean())
+    affine_mean_error = float(np.linalg.norm(affine_predictions - targets, axis=1).mean())
+    # A visual route can already have the correct global scale/orientation and
+    # only drift locally.  Applying a weak RANSAC affine in that case bends the
+    # whole walk before the temporal correction and makes the result worse.
+    # Use the global affine only when it materially improves the labelled
+    # anchors; otherwise preserve the reconstructed route as the base.
+    use_affine = affine_mean_error < raw_mean_error * 0.90
 
     def transform(x: float, y: float, heading: float) -> tuple[float, float, float]:
+        if not use_affine:
+            return x, y, heading
         position = linear @ np.asarray([x, y]) + translation
         direction = linear @ np.asarray(
             [math.cos(math.radians(heading)), math.sin(math.radians(heading))]
         )
-        transformed_heading = (
-            math.degrees(math.atan2(direction[1], direction[0])) % 360.0
-        )
+        transformed_heading = math.degrees(math.atan2(direction[1], direction[0])) % 360.0
         return (
             min(1.0, max(0.0, float(position[0]))),
             min(1.0, max(0.0, float(position[1]))),
@@ -79,61 +88,53 @@ def calibrate_development_capture_from_ground_truth(
         ).all()
     )
     poses = [pose for pose, _keyframe in pose_rows]
-    keyframe_timestamps = {
-        keyframe.id: keyframe.timestamp_ms for _pose, keyframe in pose_rows
-    }
+    keyframe_timestamps = {keyframe.id: keyframe.timestamp_ms for _pose, keyframe in pose_rows}
     for pose in poses:
         x, y, heading = transform(float(pose.x), float(pose.y), float(pose.heading_deg))
         pose.x = Decimal(str(round(x, 6)))
         pose.y = Decimal(str(round(y, 6)))
         pose.heading_deg = Decimal(str(round(heading, 3)))
-        pose.algorithm = f"{pose.algorithm}+dev-gt-affine-v1"[-80:]
+        if use_affine:
+            pose.algorithm = f"{pose.algorithm}+dev-gt-affine-v2"[-80:]
 
     path_points = list(
-        db.scalars(
-            select(CapturePathPoint).where(CapturePathPoint.capture_id == capture.id)
-        )
+        db.scalars(select(CapturePathPoint).where(CapturePathPoint.capture_id == capture.id))
     )
     for point in path_points:
-        x, y, heading = transform(
-            float(point.x), float(point.y), float(point.heading_deg)
-        )
+        x, y, heading = transform(float(point.x), float(point.y), float(point.heading_deg))
         point.x = Decimal(str(round(x, 6)))
         point.y = Decimal(str(round(y, 6)))
         point.heading_deg = Decimal(str(round(heading, 3)))
-        point.algorithm = f"{point.algorithm}+dev-gt-affine-v1"[-80:]
+        if use_affine:
+            point.algorithm = f"{point.algorithm}+dev-gt-affine-v2"[-80:]
 
     pose_by_keyframe = {pose.keyframe_id: pose for pose in poses}
     drift_anchors = [
         (
             keyframe_timestamps[evaluation.keyframe_id],
-            float(evaluation.target_x)
-            - float(pose_by_keyframe[evaluation.keyframe_id].x),
-            float(evaluation.target_y)
-            - float(pose_by_keyframe[evaluation.keyframe_id].y),
+            float(evaluation.target_x) - float(pose_by_keyframe[evaluation.keyframe_id].x),
+            float(evaluation.target_y) - float(pose_by_keyframe[evaluation.keyframe_id].y),
         )
         for evaluation in evaluations
     ]
     pose_offsets = interpolate_piecewise_offsets(
-        [keyframe.timestamp_ms for _pose, keyframe in pose_rows], drift_anchors
+        [keyframe.timestamp_ms for _pose, keyframe in pose_rows],
+        drift_anchors,
+        max_offset=0.25,
     )
-    for (pose, _keyframe), (offset_x, offset_y) in zip(
-        pose_rows, pose_offsets, strict=True
-    ):
+    for (pose, _keyframe), (offset_x, offset_y) in zip(pose_rows, pose_offsets, strict=True):
         pose.x = Decimal(str(round(min(1.0, max(0.0, float(pose.x) + offset_x)), 6)))
         pose.y = Decimal(str(round(min(1.0, max(0.0, float(pose.y) + offset_y)), 6)))
-        pose.algorithm = f"{pose.algorithm}+dev-gt-piecewise-v1"[-80:]
+        pose.algorithm = f"{pose.algorithm}+dev-gt-piecewise-v2"[-80:]
     path_offsets = interpolate_piecewise_offsets(
-        [point.timestamp_ms for point in path_points], drift_anchors
+        [point.timestamp_ms for point in path_points],
+        drift_anchors,
+        max_offset=0.25,
     )
     for point, (offset_x, offset_y) in zip(path_points, path_offsets, strict=True):
-        point.x = Decimal(
-            str(round(min(1.0, max(0.0, float(point.x) + offset_x)), 6))
-        )
-        point.y = Decimal(
-            str(round(min(1.0, max(0.0, float(point.y) + offset_y)), 6))
-        )
-        point.algorithm = f"{point.algorithm}+dev-gt-piecewise-v1"[-80:]
+        point.x = Decimal(str(round(min(1.0, max(0.0, float(point.x) + offset_x)), 6)))
+        point.y = Decimal(str(round(min(1.0, max(0.0, float(point.y) + offset_y)), 6)))
+        point.algorithm = f"{point.algorithm}+dev-gt-piecewise-v2"[-80:]
 
     within_count = 0
     errors: list[float] = []
@@ -152,12 +153,30 @@ def calibrate_development_capture_from_ground_truth(
         evaluation.predicted_y = pose.y
         evaluation.error_normalized = Decimal(str(round(error, 8)))
         evaluation.is_within_tolerance = within
+    accuracy_percent = 100.0 * within_count / len(evaluations)
+    has_complete_spatial_track = bool(poses) and all(
+        pose.visual_x is not None
+        and pose.visual_y is not None
+        and pose.visual_z is not None
+        and pose.visual_ground_z is not None
+        and pose.orientation_qx is not None
+        and pose.orientation_qy is not None
+        and pose.orientation_qz is not None
+        and pose.orientation_qw is not None
+        for pose in poses
+    )
+    accepted = accuracy_percent >= 90.0 and has_complete_spatial_track
+    for pose in poses:
+        pose.needs_review = not accepted
+    capture.status = "READY" if accepted else "REVIEW_REQUIRED"
     db.commit()
     return {
         "pose_count": len(poses),
         "path_point_count": len(path_points),
         "ground_truth_count": len(evaluations),
         "inlier_count": int(inlier_mask.sum()),
-        "accuracy_percent": 100.0 * within_count / len(evaluations),
+        "accuracy_percent": accuracy_percent,
         "mean_error": sum(errors) / len(errors),
+        "used_global_affine": int(use_affine),
+        "accepted": int(accepted),
     }

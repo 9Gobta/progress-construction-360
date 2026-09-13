@@ -34,7 +34,11 @@ from progress_api.services.learned_relocalization import (
     learned_3d_plan_anchors,
     learned_panorama_matches,
 )
-from progress_api.services.sfm_localization import SfMPathSample, recover_sfm_path
+from progress_api.services.sfm_localization import (
+    CAMERA_HEIGHT_M,
+    SfMPathSample,
+    recover_sfm_path,
+)
 from progress_api.services.stella_localization import (
     StellaLocalizationError,
     recover_stella_path,
@@ -421,25 +425,25 @@ def _transform_with_fixed_start(
         direction_y = math.cos(math.radians(heading)) * (-1 if mirror else 1)
         plan_direction_x = direction_x * cos_r - direction_y * sin_r
         plan_direction_y = direction_x * sin_r + direction_y * cos_r
-        transformed.append((
-            min(
-                1.0,
-                max(
-                    0.0,
-                    start_x
-                    + scale * (x * cos_r - (-y if mirror else y) * sin_r),
+        transformed.append(
+            (
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        start_x + scale * (x * cos_r - (-y if mirror else y) * sin_r),
+                    ),
                 ),
-            ),
-            min(
-                1.0,
-                max(
-                    0.0,
-                    start_y
-                    + scale * (x * sin_r + (-y if mirror else y) * cos_r),
+                min(
+                    1.0,
+                    max(
+                        0.0,
+                        start_y + scale * (x * sin_r + (-y if mirror else y) * cos_r),
+                    ),
                 ),
-            ),
-            math.degrees(math.atan2(plan_direction_y, plan_direction_x)) % 360.0,
-        ))
+                math.degrees(math.atan2(plan_direction_y, plan_direction_x)) % 360.0,
+            )
+        )
     return transformed
 
 
@@ -464,8 +468,7 @@ def _estimate_prior_similarity(
     best_mirror = False
     for mirror in (False, True):
         usable = [
-            (source.conjugate() if mirror else source, target)
-            for source, target in raw_usable
+            (source.conjugate() if mirror else source, target) for source, target in raw_usable
         ]
         for source, target in usable:
             factor = target / source
@@ -504,14 +507,9 @@ def _estimate_prior_similarity(
     denominator = sum(abs(source) ** 2 for source, _target in best_inliers)
     if denominator <= 1e-9:
         return None
-    best_factor = (
-        sum(source.conjugate() * target for source, target in best_inliers)
-        / denominator
-    )
+    best_factor = sum(source.conjugate() * target for source, target in best_inliers) / denominator
     residual = float(
-        np.median(
-            [abs(best_factor * source - target) for source, target in best_inliers]
-        )
+        np.median([abs(best_factor * source - target) for source, target in best_inliers])
     )
     confidence = max(
         0.0,
@@ -530,20 +528,14 @@ def _estimate_prior_affine(
     """Fit a start-anchored 2D transform with independent X/Y scale using RANSAC."""
     usable = [
         (index, (source_x, source_y), (target_x - start_x, target_y - start_y))
-        for index, ((source_x, source_y), (target_x, target_y)) in enumerate(
-            correspondences
-        )
+        for index, ((source_x, source_y), (target_x, target_y)) in enumerate(correspondences)
         if math.hypot(source_x, source_y) > 1e-5
     ]
     if len(usable) < 3:
         return None
     original_indices = [index for index, _source, _target in usable]
-    sources = np.asarray(
-        [source for _index, source, _target in usable], dtype=np.float64
-    )
-    targets = np.asarray(
-        [target for _index, _source, target in usable], dtype=np.float64
-    )
+    sources = np.asarray([source for _index, source, _target in usable], dtype=np.float64)
+    targets = np.asarray([target for _index, _source, target in usable], dtype=np.float64)
     # Independent-axis affine fitting becomes unstable when all matched plan
     # positions occupy one narrow strip. Fall back to the shape-preserving
     # similarity model rather than flattening the whole route onto that strip.
@@ -570,8 +562,10 @@ def _estimate_prior_affine(
             if len(indices) < 3:
                 continue
             median_residual = float(np.median(residuals[indices]))
-            if best_indices is None or len(indices) > len(best_indices) or (
-                len(indices) == len(best_indices) and median_residual < best_residual
+            if (
+                best_indices is None
+                or len(indices) > len(best_indices)
+                or (len(indices) == len(best_indices) and median_residual < best_residual)
             ):
                 best_indices = indices
                 best_residual = median_residual
@@ -581,11 +575,7 @@ def _estimate_prior_affine(
         sources[best_indices], targets[best_indices], rcond=None
     )
     residual = float(
-        np.median(
-            np.linalg.norm(
-                sources[best_indices] @ matrix - targets[best_indices], axis=1
-            )
-        )
+        np.median(np.linalg.norm(sources[best_indices] @ matrix - targets[best_indices], axis=1))
     )
     confidence = max(
         0.0,
@@ -610,14 +600,8 @@ def interpolate_piecewise_offsets(
             offset_y *= ratio
         grouped.setdefault(max(0, timestamp_ms), []).append((offset_x, offset_y))
     anchor_times = sorted(grouped)
-    anchor_x = [
-        float(np.median([value[0] for value in grouped[item]]))
-        for item in anchor_times
-    ]
-    anchor_y = [
-        float(np.median([value[1] for value in grouped[item]]))
-        for item in anchor_times
-    ]
+    anchor_x = [float(np.median([value[0] for value in grouped[item]])) for item in anchor_times]
+    anchor_y = [float(np.median([value[1] for value in grouped[item]])) for item in anchor_times]
     return [
         (
             float(np.interp(timestamp, anchor_times, anchor_x)),
@@ -687,9 +671,7 @@ def _anchor_constrained_alignment(
                     min(1.0, max(0.0, y + offset_y)),
                     heading,
                 )
-                for (x, y, heading), (offset_x, offset_y) in zip(
-                    points, offsets, strict=True
-                )
+                for (x, y, heading), (offset_x, offset_y) in zip(points, offsets, strict=True)
             ]
             piecewise_suffix = "-piecewise"
         return PlanAlignment(
@@ -725,11 +707,10 @@ def _anchor_constrained_alignment(
         rotation_deg=rotation_deg,
         mirror=mirror,
         confidence=confidence,
-        source=(
-            f"{source_label}:{inlier_count}-anchors"
-            f"{'-mirror' if mirror else ''}"
-        ),
+        source=(f"{source_label}:{inlier_count}-anchors{'-mirror' if mirror else ''}"),
     )
+
+
 def _transform_with_fixed_start_affine(
     relative: list[tuple[float, float, float]],
     *,
@@ -740,9 +721,9 @@ def _transform_with_fixed_start_affine(
     transformed: list[tuple[float, float, float]] = []
     for x, y, heading in relative:
         plan_delta = np.asarray([x, y]) @ matrix
-        direction = np.asarray(
-            [math.sin(math.radians(heading)), math.cos(math.radians(heading))]
-        ) @ matrix
+        direction = (
+            np.asarray([math.sin(math.radians(heading)), math.cos(math.radians(heading))]) @ matrix
+        )
         plan_heading = math.degrees(math.atan2(direction[1], direction[0])) % 360.0
         transformed.append(
             (
@@ -774,9 +755,7 @@ def _feature_match_inliers(
     matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
     pairs = matcher.knnMatch(first_descriptors, second_descriptors, k=2)
     good = [
-        pair[0]
-        for pair in pairs
-        if len(pair) == 2 and pair[0].distance < 0.72 * pair[1].distance
+        pair[0] for pair in pairs if len(pair) == 2 and pair[0].distance < 0.72 * pair[1].distance
     ]
     if len(good) < PRIOR_MIN_FEATURE_INLIERS:
         return 0
@@ -1076,9 +1055,7 @@ def _align_from_human_anchor_library(
     for _score, current_index, reference_index in matches:
         timestamp_ms = current_index * PRIOR_MATCH_INTERVAL_SECONDS * 1000
         relative = _nearest_relative_point(relative_samples, timestamp_ms)
-        correspondences.append(
-            ((relative.x, relative.y), reference_positions[reference_index])
-        )
+        correspondences.append(((relative.x, relative.y), reference_positions[reference_index]))
         timestamps.append(timestamp_ms)
     return _anchor_constrained_alignment(
         relative_samples,
@@ -1099,25 +1076,23 @@ def _align_from_previous_capture(
 ) -> PlanAlignment | None:
     previous_candidates = list(
         db.scalars(
-        select(Capture)
-        .where(
-            Capture.project_id == capture.project_id,
-            Capture.start_floor_id == capture.start_floor_id,
-            Capture.captured_at < capture.captured_at,
-            Capture.dataset_split == "DEVELOPMENT",
-            Capture.status.in_(["READY", "REVIEW_REQUIRED"]),
-        )
-        .order_by(Capture.captured_at.desc())
-        # Automatic captures are deliberately not trusted as references. Look
-        # farther back so the latest human-labelled capture is still available.
-        .limit(180)
+            select(Capture)
+            .where(
+                Capture.project_id == capture.project_id,
+                Capture.start_floor_id == capture.start_floor_id,
+                Capture.captured_at < capture.captured_at,
+                Capture.dataset_split == "DEVELOPMENT",
+                Capture.status.in_(["READY", "REVIEW_REQUIRED"]),
+            )
+            .order_by(Capture.captured_at.desc())
+            # Automatic captures are deliberately not trusted as references. Look
+            # farther back so the latest human-labelled capture is still available.
+            .limit(180)
         )
     )
     if not previous_candidates:
         return None
-    candidate_rows: list[
-        tuple[Capture, list[tuple[Keyframe, MediaFile, CameraPose]]]
-    ] = []
+    candidate_rows: list[tuple[Capture, list[tuple[Keyframe, MediaFile, CameraPose]]]] = []
     for previous_capture in previous_candidates:
         verified_rows = list(
             db.execute(
@@ -1134,6 +1109,7 @@ def _align_from_previous_capture(
                     or_(
                         CameraPose.reviewed_at.is_not(None),
                         CameraPose.algorithm.contains("dev-gt-piecewise-v1"),
+                        CameraPose.algorithm.contains("dev-gt-piecewise-v2"),
                         # A Stella localization against a calibrated persistent
                         # map is already gated when it is written.  It must be
                         # eligible as the nearest chronological reference;
@@ -1159,9 +1135,7 @@ def _align_from_previous_capture(
     # the viewer's status polling and fail with "database is locked".
     capture_start_x = float(capture.start_x)
     capture_start_y = float(capture.start_y)
-    reference_assets: list[
-        tuple[uuid.UUID, datetime, list[tuple[str, float, float]]]
-    ] = []
+    reference_assets: list[tuple[uuid.UUID, datetime, list[tuple[str, float, float]]]] = []
     for previous, rows in candidate_rows:
         sparse_rows = [row for row in rows if row[0].is_warp_point]
         candidates = sparse_rows if len(sparse_rows) >= 2 else rows
@@ -1191,12 +1165,8 @@ def _align_from_previous_capture(
             candidate_assets,
         ) in enumerate(reference_assets):
             previous_paths: list[Path] = []
-            for image_index, (object_key, _pose_x, _pose_y) in enumerate(
-                candidate_assets
-            ):
-                destination = (
-                    workspace / f"prior-{reference_index:02d}-{image_index:04d}.jpg"
-                )
+            for image_index, (object_key, _pose_x, _pose_y) in enumerate(candidate_assets):
+                destination = workspace / f"prior-{reference_index:02d}-{image_index:04d}.jpg"
                 download_object(key=object_key, destination=str(destination))
                 previous_paths.append(destination)
 
@@ -1206,12 +1176,11 @@ def _align_from_previous_capture(
             if reference_index < 3:
                 try:
                     reference_positions = [
-                        (pose_x, pose_y)
-                        for _object_key, pose_x, pose_y in candidate_assets
+                        (pose_x, pose_y) for _object_key, pose_x, pose_y in candidate_assets
                     ]
-                    signature = hashlib.sha256(
-                        repr(candidate_assets).encode("utf-8")
-                    ).hexdigest()[:16]
+                    signature = hashlib.sha256(repr(candidate_assets).encode("utf-8")).hexdigest()[
+                        :16
+                    ]
                     plan_anchors = learned_3d_plan_anchors(
                         current_frames,
                         previous_paths,
@@ -1219,15 +1188,12 @@ def _align_from_previous_capture(
                         workspace=workspace / "nearest-3d",
                         cache_key=f"{previous_id.hex}-{signature}",
                     )
-                    anchor_span = (
-                        max(
-                            (anchor.panorama_index for anchor in plan_anchors),
-                            default=0,
-                        )
-                        - min(
-                            (anchor.panorama_index for anchor in plan_anchors),
-                            default=0,
-                        )
+                    anchor_span = max(
+                        (anchor.panorama_index for anchor in plan_anchors),
+                        default=0,
+                    ) - min(
+                        (anchor.panorama_index for anchor in plan_anchors),
+                        default=0,
                     )
                     logger.info(
                         "3-D previous-capture localization current=%s "
@@ -1240,21 +1206,16 @@ def _align_from_previous_capture(
                         sum(anchor.localized_faces for anchor in plan_anchors),
                         sum(anchor.inliers for anchor in plan_anchors),
                     )
-                    if (
-                        len(plan_anchors) >= max(8, PRIOR_MIN_ROUTE_MATCHES)
-                        and anchor_span >= max(2, round(len(current_frames) * 0.80))
+                    if len(plan_anchors) >= max(8, PRIOR_MIN_ROUTE_MATCHES) and anchor_span >= max(
+                        2, round(len(current_frames) * 0.80)
                     ):
                         correspondences = []
                         timestamps = []
                         for anchor in plan_anchors:
                             timestamp_ms = (
-                                anchor.panorama_index
-                                * PRIOR_MATCH_INTERVAL_SECONDS
-                                * 1000
+                                anchor.panorama_index * PRIOR_MATCH_INTERVAL_SECONDS * 1000
                             )
-                            relative_point = _nearest_relative_point(
-                                relative_samples, timestamp_ms
-                            )
+                            relative_point = _nearest_relative_point(relative_samples, timestamp_ms)
                             correspondences.append(
                                 (
                                     (relative_point.x, relative_point.y),
@@ -1278,9 +1239,7 @@ def _align_from_previous_capture(
                             spatial_samples = [
                                 SfMPathSample(
                                     timestamp_ms=(
-                                        anchor.panorama_index
-                                        * PRIOR_MATCH_INTERVAL_SECONDS
-                                        * 1000
+                                        anchor.panorama_index * PRIOR_MATCH_INTERVAL_SECONDS * 1000
                                     ),
                                     x=anchor.visual_x,
                                     y=anchor.visual_y,
@@ -1297,8 +1256,7 @@ def _align_from_previous_capture(
                                 spatial_camera_height=float(
                                     np.median(
                                         [
-                                            anchor.visual_z
-                                            - anchor.visual_ground_z
+                                            anchor.visual_z - anchor.visual_ground_z
                                             for anchor in plan_anchors
                                         ]
                                     )
@@ -1312,8 +1270,7 @@ def _align_from_previous_capture(
                     )
                 except Exception:
                     logger.exception(
-                        "3-D previous-capture localization failed current=%s "
-                        "reference=%s",
+                        "3-D previous-capture localization failed current=%s reference=%s",
                         capture.id,
                         previous_id,
                     )
@@ -1328,6 +1285,7 @@ def _align_from_previous_capture(
         # No validated 3-D reference succeeded. Never turn pairwise 2-D image
         # similarity into an absolute plan route.
         return None
+
 
 def estimate_capture_path(
     source: Path,
@@ -1379,9 +1337,7 @@ def _poses_at_timestamps(
             results.append(current.pose)
             continue
         ratio = min(1.0, max(0.0, (timestamp_ms - current.timestamp_ms) / duration))
-        heading_delta = (
-            following.pose.heading_deg - current.pose.heading_deg + 180
-        ) % 360 - 180
+        heading_delta = (following.pose.heading_deg - current.pose.heading_deg + 180) % 360 - 180
         results.append(
             EstimatedPose(
                 x=current.pose.x + (following.pose.x - current.pose.x) * ratio,
@@ -1410,20 +1366,13 @@ def _spatial_samples_at_timestamps(
         if float(np.dot(quaternions[index - 1], quaternions[index])) < 0:
             quaternions[index] *= -1
     components = np.column_stack(
-        [
-            np.interp(target_times, source_times, quaternions[:, axis])
-            for axis in range(4)
-        ]
+        [np.interp(target_times, source_times, quaternions[:, axis]) for axis in range(4)]
     )
     components /= np.maximum(np.linalg.norm(components, axis=1, keepdims=True), 1e-9)
     xs = np.interp(target_times, source_times, [sample.x for sample in ordered])
     ys = np.interp(target_times, source_times, [sample.y for sample in ordered])
-    zs = np.interp(
-        target_times, source_times, [sample.relative_z for sample in ordered]
-    )
-    confidences = np.interp(
-        target_times, source_times, [sample.confidence for sample in ordered]
-    )
+    zs = np.interp(target_times, source_times, [sample.relative_z for sample in ordered])
+    confidences = np.interp(target_times, source_times, [sample.confidence for sample in ordered])
     return [
         SfMPathSample(
             timestamp_ms=timestamp_ms,
@@ -1458,17 +1407,11 @@ def estimate_keyframe_poses(
 
 
 def _stella_map_object_key(capture: Capture) -> str:
-    return (
-        f"projects/{capture.project_id}/captures/{capture.id}/"
-        "localization/stella-map.msg"
-    )
+    return f"projects/{capture.project_id}/captures/{capture.id}/localization/stella-map.msg"
 
 
 def _spatial_model_object_key(capture: Capture) -> str:
-    return (
-        f"projects/{capture.project_id}/captures/{capture.id}/"
-        "localization/spatial-model.json"
-    )
+    return f"projects/{capture.project_id}/captures/{capture.id}/localization/spatial-model.json"
 
 
 def _select_persistent_map_reference(
@@ -1495,8 +1438,7 @@ def _select_persistent_map_reference(
         .order_by(Capture.captured_at.desc())
     ).all()
     calibrated_by_prefix = {
-        str(calibration.id)[:8]: calibration
-        for calibration, _control_count in calibration_rows
+        str(calibration.id)[:8]: calibration for calibration, _control_count in calibration_rows
     }
     if not calibrated_by_prefix:
         return None
@@ -1638,16 +1580,11 @@ def _align_from_existing_reviewed_prefix(
         rotation_deg=rotation_deg,
         mirror=mirror,
         confidence=confidence,
-        source=(
-            f"existing-reviewed-prefix-v1:{inlier_count}-anchors"
-            f"{'-mirror' if mirror else ''}"
-        ),
+        source=(f"existing-reviewed-prefix-v1:{inlier_count}-anchors{'-mirror' if mirror else ''}"),
     )
 
 
-def _save_persistent_map(
-    db: Session, *, capture: Capture, map_path: Path
-) -> None:
+def _save_persistent_map(db: Session, *, capture: Capture, map_path: Path) -> None:
     """Persist Stella's map so later captures can relocalize in one coordinate frame."""
     if not map_path.is_file() or map_path.stat().st_size <= 0:
         return
@@ -1676,9 +1613,7 @@ def _save_persistent_map(
     db.commit()
 
 
-def _save_spatial_model(
-    db: Session, *, capture: Capture, model_path: Path
-) -> None:
+def _save_spatial_model(db: Session, *, capture: Capture, model_path: Path) -> None:
     """Persist the SfM point cloud used by the 3-D/2-D station inspector."""
     if not model_path.is_file() or model_path.stat().st_size <= 0:
         return
@@ -1725,12 +1660,8 @@ def _align_from_persistent_map(
     )
     if len(rows) < PERSISTENT_MAP_MIN_CONTROL_POINTS:
         return None
-    source = np.float32(
-        [[float(pose.visual_x), float(pose.visual_y)] for _control, pose in rows]
-    )
-    target = np.float32(
-        [[float(control.x), float(control.y)] for control, _pose in rows]
-    )
+    source = np.float32([[float(pose.visual_x), float(pose.visual_y)] for _control, pose in rows])
+    target = np.float32([[float(control.x), float(control.y)] for control, _pose in rows])
     if np.ptp(source[:, 0]) < 1e-4 or np.ptp(source[:, 1]) < 1e-4:
         return None
     matrix, mask = cv2.estimateAffine2D(
@@ -1749,9 +1680,7 @@ def _align_from_persistent_map(
     if inlier_count < PERSISTENT_MAP_MIN_CONTROL_POINTS:
         return None
     predicted_anchors = cv2.transform(source.reshape(-1, 1, 2), matrix).reshape(-1, 2)
-    residual = float(
-        np.mean(np.linalg.norm(predicted_anchors[inliers] - target[inliers], axis=1))
-    )
+    residual = float(np.mean(np.linalg.norm(predicted_anchors[inliers] - target[inliers], axis=1)))
     linear = matrix[:, :2]
     singular_values = np.linalg.svd(linear, compute_uv=False)
     if singular_values.min() <= 1e-8:
@@ -1806,8 +1735,7 @@ def _align_from_persistent_map(
         mirror=float(np.linalg.det(linear)) < 0,
         confidence=confidence,
         source=(
-            f"persistent-map-v1:{str(reference.calibration_capture_id)[:8]}:"
-            f"{inlier_count}-anchors"
+            f"persistent-map-v1:{str(reference.calibration_capture_id)[:8]}:{inlier_count}-anchors"
         ),
     )
 
@@ -1856,9 +1784,7 @@ def save_camera_poses(
     map_output = source.parent / f"stella-map-{capture.id}.msg"
     spatial_model_output = source.parent / f"spatial-model-{capture.id}.json"
     if persistent_reference is not None:
-        map_input = source.parent / (
-            f"reference-map-{persistent_reference.map_capture_id}.msg"
-        )
+        map_input = source.parent / (f"reference-map-{persistent_reference.map_capture_id}.msg")
         db.commit()
         download_object(key=persistent_reference.object_key, destination=str(map_input))
     try:
@@ -1951,9 +1877,7 @@ def save_camera_poses(
                 relative_z=sample.relative_z,
             ),
         )
-        for sample, (x, y, heading) in zip(
-            relative_samples, alignment.points, strict=True
-        )
+        for sample, (x, y, heading) in zip(relative_samples, alignment.points, strict=True)
     ]
     estimates = _poses_at_timestamps(
         path_estimates,
@@ -1976,6 +1900,14 @@ def save_camera_poses(
         visual_path,
         [item.timestamp_ms for item in keyframes],
     )
+    spatial_estimates = (
+        _spatial_samples_at_timestamps(
+            relative_samples,
+            [item.timestamp_ms for item in keyframes],
+        )
+        if all(sample.orientation_q is not None for sample in relative_samples)
+        else None
+    )
     db.execute(delete(CapturePathPoint).where(CapturePathPoint.capture_id == capture.id))
     for path_estimate in path_estimates:
         path_pose = path_estimate.pose
@@ -1995,9 +1927,11 @@ def save_camera_poses(
     keyframe_ids = [item.id for item in keyframes]
     db.execute(delete(CameraPose).where(CameraPose.keyframe_id.in_(keyframe_ids)))
     poses: list[CameraPose] = []
-    for keyframe, estimate, visual in zip(
-        keyframes, estimates, visual_estimates, strict=True
+    for row_index, (keyframe, estimate, visual) in enumerate(
+        zip(keyframes, estimates, visual_estimates, strict=True)
     ):
+        spatial = spatial_estimates[row_index] if spatial_estimates is not None else None
+        quaternion = spatial.orientation_q if spatial is not None else None
         pose = CameraPose(
             keyframe_id=keyframe.id,
             floor_id=capture.start_floor_id,
@@ -2006,10 +1940,18 @@ def save_camera_poses(
             heading_deg=Decimal(str(round(estimate.heading_deg % 360.0, 3) % 360.0)),
             visual_x=Decimal(str(round(visual.x, 6))),
             visual_y=Decimal(str(round(visual.y, 6))),
-            visual_heading_deg=Decimal(
-                str(round(visual.heading_deg % 360.0, 3) % 360.0)
-            ),
+            visual_heading_deg=Decimal(str(round(visual.heading_deg % 360.0, 3) % 360.0)),
             relative_z_m=Decimal(str(round(visual.relative_z, 6))),
+            visual_z=(Decimal(str(round(spatial.relative_z, 6))) if spatial is not None else None),
+            visual_ground_z=(
+                Decimal(str(round(spatial.relative_z - CAMERA_HEIGHT_M, 6)))
+                if spatial is not None
+                else None
+            ),
+            orientation_qx=(Decimal(str(round(quaternion[0], 8))) if quaternion else None),
+            orientation_qy=(Decimal(str(round(quaternion[1], 8))) if quaternion else None),
+            orientation_qz=(Decimal(str(round(quaternion[2], 8))) if quaternion else None),
+            orientation_qw=(Decimal(str(round(quaternion[3], 8))) if quaternion else None),
             # This score describes the visual reconstruction only. Absolute
             # floor-plan certainty is represented separately by ``needs_review``.
             confidence=Decimal(str(round(visual.confidence, 5))),
@@ -2024,11 +1966,7 @@ def save_camera_poses(
         poses.append(pose)
     pose_by_keyframe = {pose.keyframe_id: pose for pose in poses}
     evaluation_points = list(
-        db.scalars(
-            select(PathEvaluationPoint).where(
-                PathEvaluationPoint.capture_id == capture.id
-            )
-        )
+        db.scalars(select(PathEvaluationPoint).where(PathEvaluationPoint.capture_id == capture.id))
     )
     for evaluation in evaluation_points:
         pose = pose_by_keyframe.get(evaluation.keyframe_id)
@@ -2044,9 +1982,17 @@ def save_camera_poses(
         evaluation.predicted_x = Decimal(str(round(predicted_x, 6)))
         evaluation.predicted_y = Decimal(str(round(predicted_y, 6)))
         evaluation.error_normalized = Decimal(str(round(error, 8)))
-        evaluation.is_within_tolerance = error <= float(
-            evaluation.tolerance_normalized
+        evaluation.is_within_tolerance = error <= float(evaluation.tolerance_normalized)
+    accepted = _alignment_is_auto_accepted(alignment)
+    if evaluation_points:
+        within_count = sum(point.is_within_tolerance for point in evaluation_points)
+        accepted = (
+            spatial_estimates is not None
+            and len(evaluation_points) >= 20
+            and within_count / len(evaluation_points) >= 0.90
         )
+    for pose in poses:
+        pose.needs_review = not accepted
     db.commit()
     return poses
 
@@ -2083,11 +2029,13 @@ def realign_existing_camera_poses(
             .order_by(Keyframe.timestamp_ms)
         ).all()
     )
+    if get_settings().localization_engine == "pycolmap" and any(
+        not str(pose.algorithm).startswith(("rig-pycolmap-", "hloc-rig-"))
+        for _keyframe, pose in rows
+    ):
+        return None
     keyframe_count = int(
-        db.scalar(
-            select(func.count(Keyframe.id)).where(Keyframe.capture_id == capture.id)
-        )
-        or 0
+        db.scalar(select(func.count(Keyframe.id)).where(Keyframe.capture_id == capture.id)) or 0
     )
     if len(rows) < 2 or len(rows) < max(2, math.ceil(keyframe_count * 0.9)):
         return None
@@ -2142,16 +2090,14 @@ def realign_existing_camera_poses(
             alignment.spatial_samples,
             [keyframe.timestamp_ms for keyframe, _pose in rows],
         )
-        if alignment.spatial_samples is not None
-        and alignment.spatial_camera_height is not None
+        if alignment.spatial_samples is not None and alignment.spatial_camera_height is not None
         else None
     )
     algorithm = f"{STELLA_ALGORITHM_VERSION}:{alignment.source}"[:80]
     db.execute(delete(CapturePathPoint).where(CapturePathPoint.capture_id == capture.id))
     pose_by_keyframe: dict[uuid.UUID, CameraPose] = {}
-    for row_index, ((keyframe, pose), (x, y, heading)) in enumerate(zip(
-        rows, alignment.points, strict=True
-    )
+    for row_index, ((keyframe, pose), (x, y, heading)) in enumerate(
+        zip(rows, alignment.points, strict=True)
     ):
         bounded_x = min(1.0, max(0.0, x))
         bounded_y = min(1.0, max(0.0, y))
@@ -2164,15 +2110,9 @@ def realign_existing_camera_poses(
         pose.algorithm = algorithm
         pose.needs_review = not accepted
         spatial = spatial_estimates[row_index] if spatial_estimates is not None else None
-        pose.visual_x = (
-            Decimal(str(round(spatial.x, 6))) if spatial is not None else pose.visual_x
-        )
-        pose.visual_y = (
-            Decimal(str(round(spatial.y, 6))) if spatial is not None else pose.visual_y
-        )
-        pose.visual_z = (
-            Decimal(str(round(spatial.relative_z, 6))) if spatial is not None else None
-        )
+        pose.visual_x = Decimal(str(round(spatial.x, 6))) if spatial is not None else pose.visual_x
+        pose.visual_y = Decimal(str(round(spatial.y, 6))) if spatial is not None else pose.visual_y
+        pose.visual_z = Decimal(str(round(spatial.relative_z, 6))) if spatial is not None else None
         pose.visual_ground_z = (
             Decimal(
                 str(
@@ -2228,16 +2168,10 @@ def realign_existing_camera_poses(
         evaluation.predicted_x = Decimal(str(round(predicted_x, 6)))
         evaluation.predicted_y = Decimal(str(round(predicted_y, 6)))
         evaluation.error_normalized = Decimal(str(round(error, 8)))
-        evaluation.is_within_tolerance = error <= float(
-            evaluation.tolerance_normalized
-        )
+        evaluation.is_within_tolerance = error <= float(evaluation.tolerance_normalized)
 
     evaluation_points = list(
-        db.scalars(
-            select(PathEvaluationPoint).where(
-                PathEvaluationPoint.capture_id == capture.id
-            )
-        )
+        db.scalars(select(PathEvaluationPoint).where(PathEvaluationPoint.capture_id == capture.id))
     )
     if evaluation_points:
         within_count = sum(point.is_within_tolerance for point in evaluation_points)
