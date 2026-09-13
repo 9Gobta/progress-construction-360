@@ -2079,6 +2079,17 @@ def realign_existing_camera_poses(
         pose.localization_run_id = job.id
         pose.algorithm = algorithm
         pose.needs_review = not accepted
+        # HLoc has aligned the 2-D route to the plan, but this pass does not
+        # replace Stella's 3-D reconstruction frame.  A spatial backfill from
+        # an older attempt is therefore stale and must never be advertised as
+        # a full 6-DoF/mesh pose for portal projection.
+        pose.visual_z = None
+        pose.visual_ground_z = None
+        pose.orientation_qx = None
+        pose.orientation_qy = None
+        pose.orientation_qz = None
+        pose.orientation_qw = None
+        pose.visibility_target_ids = None
         if accepted:
             # This is a new automatic run, not a human verification event.
             pose.reviewed_by_id = None

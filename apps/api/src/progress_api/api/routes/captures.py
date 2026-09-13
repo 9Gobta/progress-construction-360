@@ -252,6 +252,33 @@ def _build_route_vectors(
     # must not be treated as mesh raycasting: doing so painted portals across
     # the excavation and behind obstructions on 21/12.
     use_stored_visibility_graph = is_protected_reference
+
+    def uses_plan_aligned_heading(pose: CameraPose) -> bool:
+        """Return whether HLoc changed the route without replacing its 3-D pose.
+
+        Cross-capture HLoc currently anchors Stella's path to the floor plan.
+        Its result does not replace Stella's reconstruction frame or quaternion,
+        so mixing the new plan route with the old 3-D pose makes portals drift
+        and point at a different physical place after every warp.
+        """
+        return "previous-hloc-sfm-v1:" in str(getattr(pose, "algorithm", ""))
+
+    def route_xy(pose: CameraPose) -> tuple[float, float] | None:
+        if uses_plan_aligned_heading(pose):
+            return float(pose.x), float(pose.y)
+        visual_x = getattr(pose, "visual_x", None)
+        visual_y = getattr(pose, "visual_y", None)
+        if visual_x is None or visual_y is None:
+            return None
+        return float(visual_x), float(visual_y)
+
+    def route_heading(pose: CameraPose) -> float | None:
+        value = (
+            pose.heading_deg
+            if uses_plan_aligned_heading(pose)
+            else getattr(pose, "visual_heading_deg", None)
+        )
+        return None if value is None else float(value)
     # An imported mesh visibility graph may legitimately target an in-between
     # panorama that is not one of the sparse map/timeline stations. Keep every
     # graph node available here; filtering first silently discarded approved
@@ -265,14 +292,12 @@ def _build_route_vectors(
     links: set[tuple[uuid.UUID, uuid.UUID]] = set()
     visual_steps: list[float] = []
     for (_first_frame, first), (_second_frame, second) in zip(frames, frames[1:], strict=False):
-        values = (
-            getattr(first, "visual_x", None),
-            getattr(first, "visual_y", None),
-            getattr(second, "visual_x", None),
-            getattr(second, "visual_y", None),
-        )
-        if all(value is not None for value in values):
-            visual_steps.append(hypot(float(values[2] - values[0]), float(values[3] - values[1])))
+        first_xy = route_xy(first)
+        second_xy = route_xy(second)
+        if first_xy is not None and second_xy is not None:
+            visual_steps.append(
+                hypot(second_xy[0] - first_xy[0], second_xy[1] - first_xy[1])
+            )
     positive_steps = sorted(step for step in visual_steps if step > 1e-8)
     median_step = positive_steps[len(positive_steps) // 2] if positive_steps else 0.0
 
@@ -297,25 +322,28 @@ def _build_route_vectors(
                 < ROUTE_VECTOR_MIN_CONFIDENCE
             ):
                 break
-            values = (
-                getattr(source, "visual_x", None),
-                getattr(source, "visual_y", None),
-                getattr(source, "visual_heading_deg", None),
-                getattr(previous, "visual_x", None),
-                getattr(previous, "visual_y", None),
-                getattr(target, "visual_x", None),
-                getattr(target, "visual_y", None),
-            )
-            if any(value is None for value in values):
+            source_xy = route_xy(source)
+            previous_xy = route_xy(previous)
+            target_xy = route_xy(target)
+            if (
+                source_xy is None
+                or previous_xy is None
+                or target_xy is None
+                or route_heading(source) is None
+            ):
                 break
-            segment_distance = hypot(float(values[5] - values[3]), float(values[6] - values[4]))
+            segment_distance = hypot(
+                target_xy[0] - previous_xy[0], target_xy[1] - previous_xy[1]
+            )
             if segment_distance <= 1e-8:
                 previous = target
                 continue
             if median_step and segment_distance > median_step * ROUTE_VECTOR_MAX_STEP_FACTOR:
                 break
             cumulative_distance += segment_distance
-            direct_distance = hypot(float(values[5] - values[0]), float(values[6] - values[1]))
+            direct_distance = hypot(
+                target_xy[0] - source_xy[0], target_xy[1] - source_xy[1]
+            )
             straightness = direct_distance / max(cumulative_distance, 1e-8)
             visible_distance = (
                 not median_step
@@ -340,16 +368,10 @@ def _build_route_vectors(
         ]
 
         def pose_distance(first: CameraPose, second: CameraPose) -> float:
-            if (
-                first.visual_x is not None
-                and first.visual_y is not None
-                and second.visual_x is not None
-                and second.visual_y is not None
-            ):
-                return hypot(
-                    float(first.visual_x - second.visual_x),
-                    float(first.visual_y - second.visual_y),
-                )
+            first_xy = route_xy(first)
+            second_xy = route_xy(second)
+            if first_xy is not None and second_xy is not None:
+                return hypot(second_xy[0] - first_xy[0], second_xy[1] - first_xy[1])
             return float("inf")
 
         station_index_by_id = {
@@ -586,17 +608,19 @@ def _build_route_vectors(
             for pose in (source, target)
         )
         raw_dz = float((target.relative_z_m or 0) - (source.relative_z_m or 0))
-        source_visual_x = getattr(source, "visual_x", None)
-        source_visual_y = getattr(source, "visual_y", None)
-        source_visual_heading = getattr(source, "visual_heading_deg", None)
-        target_visual_x = getattr(target, "visual_x", None)
-        target_visual_y = getattr(target, "visual_y", None)
+        source_xy = route_xy(source)
+        target_xy = route_xy(target)
+        source_visual_x = source_xy[0] if source_xy is not None else None
+        source_visual_y = source_xy[1] if source_xy is not None else None
+        source_visual_heading = route_heading(source)
+        target_visual_x = target_xy[0] if target_xy is not None else None
+        target_visual_y = target_xy[1] if target_xy is not None else None
         source_visual_z = getattr(source, "visual_z", None)
         target_ground_z = getattr(target, "visual_ground_z", None)
         quaternion = tuple(
             getattr(source, f"orientation_q{axis}", None) for axis in "xyzw"
         )
-        has_full_pose = all(
+        has_full_pose = not uses_plan_aligned_heading(source) and all(
             value is not None
             for value in (source_visual_z, target_ground_z, *quaternion)
         )
@@ -687,7 +711,13 @@ def _build_route_vectors(
                 local_yaw_deg=local_yaw,
                 local_pitch_deg=local_pitch,
                 direction_source=(
-                    "full-6dof-mesh" if has_full_pose else "visual-slam-pose"
+                    "full-6dof-mesh"
+                    if has_full_pose
+                    else (
+                        "plan-aligned-heading"
+                        if uses_plan_aligned_heading(source)
+                        else "visual-slam-pose"
+                    )
                 ),
                 confidence=confidence,
                 verified=True,

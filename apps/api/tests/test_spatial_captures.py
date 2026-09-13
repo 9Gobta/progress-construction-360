@@ -555,6 +555,71 @@ def test_route_vector_visual_direction_is_independent_from_plan() -> None:
     assert forward.confidence == pytest.approx(0.9)
 
 
+def test_hloc_plan_alignment_does_not_reuse_stale_spatial_pose() -> None:
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    first_id = uuid.uuid4()
+    second_id = uuid.uuid4()
+    algorithm = "stella-vslam-visual-graph-v4:previous-hloc-sfm-v1:reference"
+    rows = [
+        (
+            SimpleNamespace(id=first_id, quality_status="USABLE"),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                x=Decimal("0.20"),
+                y=Decimal("0.20"),
+                heading_deg=Decimal("0"),
+                relative_z_m=None,
+                # Deliberately contradictory stale Stella coordinates/pose.
+                visual_x=Decimal("0"),
+                visual_y=Decimal("0"),
+                visual_heading_deg=Decimal("180"),
+                visual_z=Decimal("1.65"),
+                visual_ground_z=Decimal("0"),
+                orientation_qx=Decimal("0"),
+                orientation_qy=Decimal("0"),
+                orientation_qz=Decimal("0"),
+                orientation_qw=Decimal("1"),
+                algorithm=algorithm,
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+            ),
+        ),
+        (
+            SimpleNamespace(id=second_id, quality_status="USABLE"),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                x=Decimal("0.20"),
+                y=Decimal("0.30"),
+                heading_deg=Decimal("0"),
+                relative_z_m=None,
+                visual_x=Decimal("1"),
+                visual_y=Decimal("0"),
+                visual_heading_deg=Decimal("180"),
+                visual_z=Decimal("1.65"),
+                visual_ground_z=Decimal("0"),
+                orientation_qx=Decimal("0"),
+                orientation_qy=Decimal("0"),
+                orientation_qz=Decimal("0"),
+                orientation_qw=Decimal("1"),
+                algorithm=algorithm,
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+            ),
+        ),
+    ]
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+    forward = next(item for item in vectors if item.from_keyframe_id == first_id)
+
+    assert forward.delta_x == pytest.approx(0)
+    assert forward.delta_y == pytest.approx(0.1)
+    assert forward.local_yaw_deg == pytest.approx(0)
+    assert forward.direction_source == "plan-aligned-heading"
+
+
 def test_route_vectors_reject_pose_below_manual_review_floor() -> None:
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()

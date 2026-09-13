@@ -258,6 +258,7 @@ function visualHeading(frame: Keyframe) {
 
 const TOUR_ROUTE_SOURCES = new Set([
   "visual-slam-pose",
+  "plan-aligned-heading",
   "full-6dof-mesh",
   "stabilized-360-mesh",
 ]);
@@ -668,7 +669,12 @@ export function PanoramaViewer({
           const placement = groundPortalPlacement({
             distance: nextPortal.distance,
             localYawDeg: nextPortal.local_yaw_deg,
-            localPitchDeg: nextPortal.local_pitch_deg,
+            // HLoc aligned this route in 2-D only. Its old Stella height is
+            // from another coordinate frame, so let the calibrated ground
+            // model derive pitch instead of painting the portal on that ray.
+            localPitchDeg: nextPortal.direction_source === "plan-aligned-heading"
+              ? null
+              : nextPortal.local_pitch_deg,
             reconstructedCameraHeight: cameraHeight,
             fallbackStep: medianRouteDistance,
           });
@@ -775,7 +781,9 @@ export function PanoramaViewer({
     const placement = groundPortalPlacement({
       distance: nearestForward.distance,
       localYawDeg: nearestForward.local_yaw_deg,
-      localPitchDeg: nearestForward.local_pitch_deg,
+      localPitchDeg: nearestForward.direction_source === "plan-aligned-heading"
+        ? null
+        : nearestForward.local_pitch_deg,
       reconstructedCameraHeight: cameraHeight,
       fallbackStep: medianRouteDistance,
     });
@@ -1397,7 +1405,9 @@ export function PanoramaViewer({
       const placement = groundPortalPlacement({
         distance: route.distance,
         localYawDeg: route.local_yaw_deg,
-        localPitchDeg: route.local_pitch_deg,
+        localPitchDeg: route.direction_source === "plan-aligned-heading"
+          ? null
+          : route.local_pitch_deg,
         reconstructedCameraHeight,
         fallbackStep: medianRouteDistanceRef.current,
       });
