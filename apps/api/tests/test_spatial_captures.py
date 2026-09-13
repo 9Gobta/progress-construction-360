@@ -71,6 +71,55 @@ def test_route_vectors_link_real_spatial_neighbours() -> None:
     assert forward.bearing_deg == pytest.approx(90)
 
 
+def test_route_vectors_prefer_image_verified_portal_bearing() -> None:
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    first_id = uuid.uuid4()
+    second_id = uuid.uuid4()
+    rows = [
+        (
+            SimpleNamespace(id=first_id, is_warp_point=True),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=None,
+                visual_x=Decimal("0"),
+                visual_y=Decimal("0"),
+                visual_heading_deg=Decimal("0"),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+                portal_directions_json=json.dumps(
+                    {
+                        str(second_id): {
+                            "local_yaw_deg": 31.25,
+                            "confidence": 0.98,
+                        }
+                    }
+                ),
+            ),
+        ),
+        (
+            SimpleNamespace(id=second_id, is_warp_point=True),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                relative_z_m=None,
+                visual_x=Decimal("1"),
+                visual_y=Decimal("0"),
+                visual_heading_deg=Decimal("0"),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+            ),
+        ),
+    ]
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+    forward = next(item for item in vectors if item.from_keyframe_id == first_id)
+
+    assert forward.local_yaw_deg == pytest.approx(31.25)
+    assert forward.verification_method == "panorama-pair-essential-matrix-v1"
+
+
 def test_route_vectors_hide_unverified_portals() -> None:
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()

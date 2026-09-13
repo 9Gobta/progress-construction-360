@@ -253,6 +253,9 @@ class CameraPose(TimestampMixin, Base):
     )
     # JSON UUID list produced by ray/mesh visibility tests for this station.
     visibility_target_ids: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON map keyed by destination keyframe id. Bearings are measured from
+    # the actual source/target panorama pair with an essential-matrix check.
+    portal_directions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     relative_z_m: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
     confidence: Mapped[Decimal] = mapped_column(Numeric(6, 5))
     localization_run_id: Mapped[uuid.UUID] = mapped_column(

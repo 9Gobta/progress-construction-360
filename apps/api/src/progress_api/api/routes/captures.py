@@ -583,6 +583,27 @@ def _build_route_vectors(
                     links.add((source_frame.id, mapped_target_id))
 
     by_id = {keyframe.id: pose for keyframe, pose in frames}
+
+    def verified_portal_direction(
+        source: CameraPose, target_id: uuid.UUID
+    ) -> dict[str, object] | None:
+        try:
+            stored = json.loads(getattr(source, "portal_directions_json", None) or "{}")
+        except (TypeError, ValueError):
+            return None
+        candidate = stored.get(str(target_id)) if isinstance(stored, dict) else None
+        if not isinstance(candidate, dict):
+            return None
+        yaw = candidate.get("local_yaw_deg")
+        confidence = candidate.get("confidence")
+        if (
+            not isinstance(yaw, (int, float))
+            or not isinstance(confidence, (int, float))
+            or confidence < 0.55
+        ):
+            return None
+        return candidate
+
     result: list[RouteVectorRead] = []
     for source_id, target_id in sorted(links, key=lambda pair: (str(pair[0]), str(pair[1]))):
         source = by_id[source_id]
@@ -681,6 +702,13 @@ def _build_route_vectors(
                 local_pitch = degrees(atan2(dz, visual_distance))
         else:
             continue
+        image_verified = verified_portal_direction(source, target_id)
+        if image_verified is not None:
+            # The pairwise essential matrix measures the destination direction
+            # from the actual two panoramas and removes accumulated trajectory
+            # interpolation error. Gravity/height still supplies the floor
+            # pitch, so the ring stays on the walking surface.
+            local_yaw = float(image_verified["local_yaw_deg"])
         confidence = min(float(source.confidence), float(target.confidence))
         result.append(
             RouteVectorRead(
@@ -705,7 +733,9 @@ def _build_route_vectors(
                 confidence=confidence,
                 verified=True,
                 verification_method=(
-                    "full-6dof-equirectangular+triangle-mesh-raycast"
+                    "panorama-pair-essential-matrix-v1"
+                    if image_verified is not None
+                    else "full-6dof-equirectangular+triangle-mesh-raycast"
                     if has_full_pose and use_stored_visibility_graph
                     else "full-6dof-observed-trajectory-corridor"
                     if has_full_pose

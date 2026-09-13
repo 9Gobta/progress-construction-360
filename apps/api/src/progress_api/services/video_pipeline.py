@@ -25,6 +25,7 @@ from progress_api.services.insta360_stitching import (
     stitch_insv,
 )
 from progress_api.services.localization import save_camera_poses
+from progress_api.services.portal_verification import estimate_portal_direction
 from progress_api.services.temporary_workspace import temporary_workspace
 from progress_api.worker import celery_app
 
@@ -560,6 +561,44 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
                 warp_point_indices = select_warp_points(quality)
             for keyframe in keyframes:
                 keyframe.is_warp_point = keyframe.frame_index in warp_point_indices
+
+            # A reconstructed path can accumulate several degrees of lateral
+            # error even when its floor-plan fit looks convincing. Verify each
+            # portal against the exact pair of panoramas it connects and save
+            # that measured camera-to-camera bearing for the viewer.
+            station_frames = [
+                keyframe
+                for keyframe in keyframes
+                if keyframe.frame_index in warp_point_indices
+            ]
+            verified_by_keyframe: dict[uuid.UUID, dict[str, dict[str, float | int | str]]] = {}
+            for source_frame, target_frame in zip(
+                station_frames, station_frames[1:], strict=False
+            ):
+                verified = estimate_portal_direction(
+                    frames[source_frame.frame_index],
+                    frames[target_frame.frame_index],
+                )
+                if verified is None:
+                    continue
+                common = {
+                    "confidence": round(verified.confidence, 5),
+                    "inliers": verified.inliers,
+                    "dispersion_deg": round(verified.dispersion_deg, 3),
+                    "method": "panorama-pair-essential-matrix-v1",
+                }
+                verified_by_keyframe.setdefault(source_frame.id, {})[
+                    str(target_frame.id)
+                ] = {**common, "local_yaw_deg": round(verified.forward_yaw_deg, 3)}
+                verified_by_keyframe.setdefault(target_frame.id, {})[
+                    str(source_frame.id)
+                ] = {**common, "local_yaw_deg": round(verified.backward_yaw_deg, 3)}
+            for keyframe_id, directions in verified_by_keyframe.items():
+                pose = pose_by_keyframe.get(keyframe_id)
+                if pose is not None:
+                    pose.portal_directions_json = json.dumps(
+                        directions, separators=(",", ":")
+                    )
 
             tour_frames = _extract_tour_panoramas(
                 source=processing_source,
