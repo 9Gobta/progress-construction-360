@@ -16,7 +16,7 @@ import * as THREE from "three";
 
 import {
   groundPortalPlacement,
-  reciprocalPortalViewLongitude,
+  portalArrivalViewLongitude,
 } from "@/lib/portal-placement";
 import type { CaptureDetail, Floor, FloorPlanInfo } from "@/lib/types";
 
@@ -1064,17 +1064,13 @@ export function PanoramaViewer({
         && isUsableTourRoute(route)
       ));
       const exactTargetLongitude = returnRoute
-        ? reciprocalPortalViewLongitude({
-          sourceViewLongitude: longitude,
-          sourcePortalYaw: selectedRoute.local_yaw_deg,
+        ? portalArrivalViewLongitude({
           targetReturnPortalYaw: returnRoute.local_yaw_deg,
         })
         : undefined;
-      // Use the actual reciprocal edge for every tour type. This is local to
-      // the two stations and therefore remains stable even when a legacy
-      // Stella capture has accumulated global heading drift. Carrying a
-      // global heading (or auto-facing an unrelated next edge) is what made
-      // the return ring appear in a different place after travelling back.
+      // Use the measured reciprocal edge and arrive facing exactly away from
+      // the source. Turning 180 degrees now centres the return station instead
+      // of carrying an off-centre click error into every later panorama.
       selectKeyframeRef.current(
         target,
         exactTargetLongitude === undefined ? targetWorldHeading : undefined,
