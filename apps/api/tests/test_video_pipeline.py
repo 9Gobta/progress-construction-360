@@ -72,8 +72,7 @@ def test_spatial_warp_points_are_distributed_by_travelled_distance() -> None:
 
 def test_spatial_warp_points_do_not_stack_during_stationary_video() -> None:
     samples = [
-        TourStationSample(index, index * 500, "USABLE", 2.0, 3.0, 0.0)
-        for index in range(17)
+        TourStationSample(index, index * 500, "USABLE", 2.0, 3.0, 0.0) for index in range(17)
     ]
 
     assert select_spatial_warp_points(samples) == {0, 16}
@@ -82,14 +81,16 @@ def test_spatial_warp_points_do_not_stack_during_stationary_video() -> None:
 def test_dense_warp_points_remove_only_consecutive_duplicate_places() -> None:
     samples = [
         TourStationSample(index, index * 1000, "USABLE", x, y, 0)
-        for index, (x, y) in enumerate([
-            (0, 0),
-            (0, 0),
-            (1, 0),
-            (1, 0),
-            (0, 0),
-            (0, 0),
-        ])
+        for index, (x, y) in enumerate(
+            [
+                (0, 0),
+                (0, 0),
+                (1, 0),
+                (1, 0),
+                (0, 0),
+                (0, 0),
+            ]
+        )
     ]
 
     assert remove_consecutive_duplicate_warp_points(
@@ -98,7 +99,7 @@ def test_dense_warp_points_remove_only_consecutive_duplicate_places() -> None:
     ) == {0, 2, 4, 5}
 
 
-def test_spatial_warp_points_fill_long_temporal_gaps_while_camera_moves() -> None:
+def test_spatial_warp_points_do_not_turn_tiny_drift_into_fake_steps() -> None:
     samples = [
         TourStationSample(
             index,
@@ -114,10 +115,10 @@ def test_spatial_warp_points_fill_long_temporal_gaps_while_camera_moves() -> Non
     selected = select_spatial_warp_points(samples)
     selected_times = sorted(samples[index].timestamp_ms for index in selected)
 
-    assert max(
-        right - left
-        for left, right in zip(selected_times, selected_times[1:], strict=False)
-    ) <= 6000
+    # The first 20 seconds move only four centimetres in the reconstructed
+    # frame. A time-based filler would paint several rings there even though a
+    # click could only swap to an almost identical panorama.
+    assert all(timestamp == 0 or timestamp >= 20_000 for timestamp in selected_times)
 
 
 def test_spatial_visibility_targets_use_nearest_real_stations_and_cap_at_twenty() -> None:
@@ -139,7 +140,8 @@ def test_spatial_visibility_targets_use_nearest_real_stations_and_cap_at_twenty(
 
 
 def test_tour_panorama_extraction_decodes_selected_frames_in_one_pass(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     commands: list[list[str]] = []
 
@@ -150,9 +152,7 @@ def test_tour_panorama_extraction_decodes_selected_frames_in_one_pass(
         (output / "000001.jpg").write_bytes(b"first")
         (output / "000002.jpg").write_bytes(b"second")
 
-    monkeypatch.setattr(
-        "progress_api.services.video_pipeline._binary", lambda name: name
-    )
+    monkeypatch.setattr("progress_api.services.video_pipeline._binary", lambda name: name)
     monkeypatch.setattr("progress_api.services.video_pipeline._run", fake_run)
 
     result = _extract_tour_panoramas(
@@ -166,6 +166,4 @@ def test_tour_panorama_extraction_decodes_selected_frames_in_one_pass(
 
     assert list(result) == [0, 4]
     assert len(commands) == 1
-    assert any(
-        "select=eq(n\\,0)+eq(n\\,60)" in argument for argument in commands[0]
-    )
+    assert any("select=eq(n\\,0)+eq(n\\,60)" in argument for argument in commands[0])

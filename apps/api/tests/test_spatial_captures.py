@@ -231,7 +231,7 @@ def test_authoritative_visibility_maps_in_between_frames_to_real_warp_stations()
                     visual_y=Decimal("0"),
                     visual_heading_deg=Decimal("0"),
                     visibility_target_ids=(
-                        "[" + ",".join(f'\"{target}\"' for target in targets) + "]"
+                        "[" + ",".join(f'"{target}"' for target in targets) + "]"
                     ),
                     confidence=Decimal("0.9"),
                     localization_run_id=run_id,
@@ -244,11 +244,7 @@ def test_authoritative_visibility_maps_in_between_frames_to_real_warp_stations()
     # The mesh may see a dense processing panorama, but a rendered portal must
     # resolve to a real tour station before the click. Otherwise the client
     # draws one destination and snaps to a different nearby station afterward.
-    assert {
-        item.to_keyframe_id
-        for item in vectors
-        if item.from_keyframe_id == ids[0]
-    } == {ids[2]}
+    assert {item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[0]} == {ids[2]}
 
 
 def test_authoritative_visibility_does_not_jump_across_a_distant_turn() -> None:
@@ -258,36 +254,37 @@ def test_authoritative_visibility_does_not_jump_across_a_distant_turn() -> None:
     points = [(0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (3, 2), (3, 3), (2, 3)]
     rows = []
     for index, (frame_id, (x, y)) in enumerate(zip(ids, points, strict=True)):
-        rows.append((
-            SimpleNamespace(
-                id=frame_id,
-                capture_id=uuid.uuid4(),
-                quality_status="USABLE",
-                is_warp_point=True,
-            ),
-            object(),
-            SimpleNamespace(
-                floor_id=floor_id,
-                relative_z_m=Decimal("0"),
-                visual_x=Decimal(x),
-                visual_y=Decimal(y),
-                visual_heading_deg=Decimal("0"),
-                visibility_target_ids=(f'["{ids[-1]}"]' if index == 0 else "[]"),
-                confidence=Decimal("0.9"),
-                localization_run_id=run_id,
-            ),
-        ))
+        rows.append(
+            (
+                SimpleNamespace(
+                    id=frame_id,
+                    capture_id=uuid.uuid4(),
+                    quality_status="USABLE",
+                    is_warp_point=True,
+                ),
+                object(),
+                SimpleNamespace(
+                    floor_id=floor_id,
+                    relative_z_m=Decimal("0"),
+                    visual_x=Decimal(x),
+                    visual_y=Decimal(y),
+                    visual_heading_deg=Decimal("0"),
+                    visibility_target_ids=(f'["{ids[-1]}"]' if index == 0 else "[]"),
+                    confidence=Decimal("0.9"),
+                    localization_run_id=run_id,
+                ),
+            )
+        )
 
     vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
 
     assert not any(
-        item.from_keyframe_id == ids[0] and item.to_keyframe_id == ids[-1]
-        for item in vectors
+        item.from_keyframe_id == ids[0] and item.to_keyframe_id == ids[-1] for item in vectors
     )
 
 
-def test_generated_visibility_graph_expands_straight_walk_without_manual_portals() -> None:
-    """A stale nearest-neighbour graph must not reduce an automatic tour to 2 rings."""
+def test_generated_visibility_graph_uses_only_observed_adjacent_stations() -> None:
+    """A generated graph cannot claim long-range visibility without a depth mesh."""
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()
     ids = [uuid.uuid4() for _ in range(5)]
@@ -318,13 +315,11 @@ def test_generated_visibility_graph_expands_straight_walk_without_manual_portals
 
     vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
 
-    assert {
-        item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[0]
-    } == {ids[1], ids[2], ids[3], ids[4]}
+    assert {item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[0]} == {ids[1]}
 
 
-def test_generated_visibility_graph_covers_a_gently_curving_walk() -> None:
-    """A real walkthrough bend should retain several visible forward portals."""
+def test_generated_visibility_graph_keeps_only_curve_neighbours() -> None:
+    """A curve exposes its directly observed previous and next stations."""
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()
     ids = [uuid.uuid4() for _ in range(8)]
@@ -362,14 +357,10 @@ def test_generated_visibility_graph_covers_a_gently_curving_walk() -> None:
     ]
 
     vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
-    second_targets = {
-        item.to_keyframe_id
-        for item in vectors
-        if item.from_keyframe_id == ids[1]
-    }
+    second_targets = {item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[1]}
 
     assert ids[0] in second_targets
-    assert set(ids[2:7]).issubset(second_targets)
+    assert second_targets == {ids[0], ids[2]}
 
 
 def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift() -> None:
@@ -378,32 +369,34 @@ def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift()
     ids = [uuid.uuid4(), uuid.uuid4()]
     rows = []
     for index, frame_id in enumerate(ids):
-        rows.append((
-            SimpleNamespace(
-                id=frame_id,
-                capture_id=uuid.uuid4(),
-                quality_status="USABLE",
-                is_warp_point=True,
-            ),
-            object(),
-            SimpleNamespace(
-                floor_id=floor_id,
-                relative_z_m=Decimal(index),
-                visual_x=Decimal(index),
-                visual_y=Decimal("0"),
-                visual_z=Decimal(index),
-                visual_ground_z=Decimal(index) - Decimal("1.65"),
-                visual_heading_deg=Decimal("0"),
-                orientation_qx=Decimal("0"),
-                orientation_qy=Decimal("0"),
-                orientation_qz=Decimal("0"),
-                orientation_qw=Decimal("1"),
-                visibility_target_ids=(f'["{ids[1]}"]' if index == 0 else "[]"),
-                confidence=Decimal("0.9"),
-                localization_run_id=run_id,
-                algorithm="stella-vslam-visual-graph-v4+pycolmap-spatial-v1",
-            ),
-        ))
+        rows.append(
+            (
+                SimpleNamespace(
+                    id=frame_id,
+                    capture_id=uuid.uuid4(),
+                    quality_status="USABLE",
+                    is_warp_point=True,
+                ),
+                object(),
+                SimpleNamespace(
+                    floor_id=floor_id,
+                    relative_z_m=Decimal(index),
+                    visual_x=Decimal(index),
+                    visual_y=Decimal("0"),
+                    visual_z=Decimal(index),
+                    visual_ground_z=Decimal(index) - Decimal("1.65"),
+                    visual_heading_deg=Decimal("0"),
+                    orientation_qx=Decimal("0"),
+                    orientation_qy=Decimal("0"),
+                    orientation_qz=Decimal("0"),
+                    orientation_qw=Decimal("1"),
+                    visibility_target_ids=(f'["{ids[1]}"]' if index == 0 else "[]"),
+                    confidence=Decimal("0.9"),
+                    localization_run_id=run_id,
+                    algorithm="stella-vslam-visual-graph-v4+pycolmap-spatial-v1",
+                ),
+            )
+        )
 
     vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
     forward = next(item for item in vectors if item.from_keyframe_id == ids[0])
@@ -417,54 +410,56 @@ def test_complete_spatial_pose_does_not_trust_proximity_as_mesh_visibility() -> 
     run_id = uuid.uuid4()
     ids = [uuid.uuid4() for _ in range(9)]
     points = [
-        (0, 0), (1, 0), (2, 0), (3, 0), (3, 1),
-        (2, 1), (1, 1), (0, 1), (-1, 1),
+        (0, 0),
+        (1, 0),
+        (2, 0),
+        (3, 0),
+        (3, 1),
+        (2, 1),
+        (1, 1),
+        (0, 1),
+        (-1, 1),
     ]
     rows = []
     for index, (frame_id, (x, y)) in enumerate(zip(ids, points, strict=True)):
-        rows.append((
-            SimpleNamespace(
-                id=frame_id,
-                capture_id=uuid.uuid4(),
-                quality_status="USABLE",
-                is_warp_point=True,
-            ),
-            object(),
-            SimpleNamespace(
-                floor_id=floor_id,
-                relative_z_m=Decimal("0"),
-                visual_x=Decimal(x),
-                visual_y=Decimal(y),
-                visual_z=Decimal("1.65"),
-                visual_ground_z=Decimal("0"),
-                visual_heading_deg=Decimal("0"),
-                orientation_qx=Decimal("0"),
-                orientation_qy=Decimal("0"),
-                orientation_qz=Decimal("0"),
-                orientation_qw=Decimal("1"),
-                visibility_target_ids=(
-                    json.dumps([str(target) for target in ids[1:]])
-                    if index == 0
-                    else "[]"
+        rows.append(
+            (
+                SimpleNamespace(
+                    id=frame_id,
+                    capture_id=uuid.uuid4(),
+                    quality_status="USABLE",
+                    is_warp_point=True,
                 ),
-                confidence=Decimal("0.9"),
-                localization_run_id=run_id,
-                algorithm="stella-vslam-visual-graph-v4+pycolmap-spatial-v1",
-            ),
-        ))
+                object(),
+                SimpleNamespace(
+                    floor_id=floor_id,
+                    relative_z_m=Decimal("0"),
+                    visual_x=Decimal(x),
+                    visual_y=Decimal(y),
+                    visual_z=Decimal("1.65"),
+                    visual_ground_z=Decimal("0"),
+                    visual_heading_deg=Decimal("0"),
+                    orientation_qx=Decimal("0"),
+                    orientation_qy=Decimal("0"),
+                    orientation_qz=Decimal("0"),
+                    orientation_qw=Decimal("1"),
+                    visibility_target_ids=(
+                        json.dumps([str(target) for target in ids[1:]]) if index == 0 else "[]"
+                    ),
+                    confidence=Decimal("0.9"),
+                    localization_run_id=run_id,
+                    algorithm="stella-vslam-visual-graph-v4+pycolmap-spatial-v1",
+                ),
+            )
+        )
 
     vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
 
-    targets = {
-        item.to_keyframe_id
-        for item in vectors
-        if item.from_keyframe_id == ids[0]
-    }
+    targets = {item.to_keyframe_id for item in vectors if item.from_keyframe_id == ids[0]}
     assert ids[1] in targets
     assert ids[-1] not in targets
     assert all(
-        item.verification_method == "full-6dof-observed-trajectory-corridor"
-        for item in vectors
+        item.verification_method == "full-6dof-observed-trajectory-corridor" for item in vectors
     )
     assert all(
         any(
@@ -501,7 +496,7 @@ def test_route_vectors_expose_straight_visible_stations_without_crossing_turns()
     straight_vectors = captures._build_route_vectors(straight_rows)  # type: ignore[arg-type]
     assert {
         item.to_keyframe_id for item in straight_vectors if item.from_keyframe_id == straight_ids[0]
-    } == set(straight_ids[1:])
+    } == {straight_ids[1]}
 
     corner_ids = [uuid.uuid4() for _ in range(3)]
     corner_points = [(0, 0), (1, 0), (1, 1)]
@@ -899,11 +894,14 @@ def test_capture_after_structural_end_date_is_rejected(
             "size_bytes": 10_000_000,
         },
     ).json()
-    assert client.patch(
-        f"/api/v1/projects/{project_id}/scope",
-        headers=auth_headers,
-        json={"structural_tracking_end_date": "2026-07-03"},
-    ).status_code == 200
+    assert (
+        client.patch(
+            f"/api/v1/projects/{project_id}/scope",
+            headers=auth_headers,
+            json={"structural_tracking_end_date": "2026-07-03"},
+        ).status_code
+        == 200
+    )
 
     response = client.post(
         f"/api/v1/projects/{project_id}/captures",
@@ -951,15 +949,16 @@ def test_existing_capture_after_structural_end_date_is_hidden(
             "start_y": 0.75,
         },
     ).json()
-    assert client.patch(
-        f"/api/v1/projects/{project_id}/scope",
-        headers=auth_headers,
-        json={"structural_tracking_end_date": "2026-07-03"},
-    ).status_code == 200
-
-    listed = client.get(
-        f"/api/v1/projects/{project_id}/captures", headers=auth_headers
+    assert (
+        client.patch(
+            f"/api/v1/projects/{project_id}/scope",
+            headers=auth_headers,
+            json={"structural_tracking_end_date": "2026-07-03"},
+        ).status_code
+        == 200
     )
+
+    listed = client.get(f"/api/v1/projects/{project_id}/captures", headers=auth_headers)
     detail = client.get(
         f"/api/v1/projects/{project_id}/captures/{capture['id']}",
         headers=auth_headers,
@@ -1861,15 +1860,17 @@ def test_sub_admin_can_correct_beam_length_but_cannot_replace_codes(
         headers=sub_admin_headers,
         json={
             "sheet_name": "ST-03",
-            "segments": [{
-                "code": "HACKED",
-                "beam_type": "B2",
-                "start_x": 0.1,
-                "start_y": 0.1,
-                "end_x": 0.2,
-                "end_y": 0.2,
-                "length_m": 9,
-            }],
+            "segments": [
+                {
+                    "code": "HACKED",
+                    "beam_type": "B2",
+                    "start_x": 0.1,
+                    "start_y": 0.1,
+                    "end_x": 0.2,
+                    "end_y": 0.2,
+                    "length_m": 9,
+                }
+            ],
         },
     )
     # Role checks intentionally hide restricted project operations as not found.
@@ -2001,12 +2002,18 @@ def test_work_progress_carries_forward_to_later_capture_without_leaking_backward
         headers=auth_headers,
         params={"floor_id": floor["id"]},
     ).json()
-    assert next(
-        row for row in later_reloaded["items"] if row["work_item_id"] == item["work_item_id"]
-    )["progress_percent"] == "35.000"
-    assert next(
-        row for row in earlier_reloaded["items"] if row["work_item_id"] == item["work_item_id"]
-    )["progress_percent"] is None
+    assert (
+        next(row for row in later_reloaded["items"] if row["work_item_id"] == item["work_item_id"])[
+            "progress_percent"
+        ]
+        == "35.000"
+    )
+    assert (
+        next(
+            row for row in earlier_reloaded["items"] if row["work_item_id"] == item["work_item_id"]
+        )["progress_percent"]
+        is None
+    )
 
 
 def test_replacing_beam_plan_cannot_hide_segments_with_progress_history(
@@ -2025,15 +2032,17 @@ def test_replacing_beam_plan_cannot_hide_segments_with_progress_history(
         headers=auth_headers,
         json={
             "sheet_name": "ST-03",
-            "segments": [{
-                "code": "CB4",
-                "beam_type": "CB4",
-                "start_x": 0.2,
-                "start_y": 0.4,
-                "end_x": 0.3,
-                "end_y": 0.4,
-                "length_m": 1.7,
-            }],
+            "segments": [
+                {
+                    "code": "CB4",
+                    "beam_type": "CB4",
+                    "start_x": 0.2,
+                    "start_y": 0.4,
+                    "end_x": 0.3,
+                    "end_y": 0.4,
+                    "length_m": 1.7,
+                }
+            ],
         },
     ).json()[0]
     media = client.post(
@@ -2061,10 +2070,12 @@ def test_replacing_beam_plan_cannot_hide_segments_with_progress_history(
         headers=auth_headers,
         json={
             "floor_id": floor["id"],
-            "entries": [{
-                "beam_segment_id": segment["id"],
-                "stage_ranges": {"SETTING_OUT": [{"start_m": 0, "end_m": 1.7}]},
-            }],
+            "entries": [
+                {
+                    "beam_segment_id": segment["id"],
+                    "stage_ranges": {"SETTING_OUT": [{"start_m": 0, "end_m": 1.7}]},
+                }
+            ],
         },
     )
     assert saved.status_code == 200
@@ -2074,15 +2085,17 @@ def test_replacing_beam_plan_cannot_hide_segments_with_progress_history(
         headers=auth_headers,
         json={
             "sheet_name": "ST-03",
-            "segments": [{
-                "code": "NEW-CODE",
-                "beam_type": "CB4",
-                "start_x": 0.2,
-                "start_y": 0.4,
-                "end_x": 0.3,
-                "end_y": 0.4,
-                "length_m": 1.7,
-            }],
+            "segments": [
+                {
+                    "code": "NEW-CODE",
+                    "beam_type": "CB4",
+                    "start_x": 0.2,
+                    "start_y": 0.4,
+                    "end_x": 0.3,
+                    "end_y": 0.4,
+                    "length_m": 1.7,
+                }
+            ],
         },
     )
     assert replacement.status_code == 409
@@ -2187,8 +2200,7 @@ def test_beam_progress_is_stored_per_capture_and_keeps_latest_value(
     )
     assert stage_save.status_code == 200
     stage_item = next(
-        item for item in stage_save.json()["items"]
-        if item["beam_segment_id"] == segments[0]["id"]
+        item for item in stage_save.json()["items"] if item["beam_segment_id"] == segments[0]["id"]
     )
     assert float(stage_item["progress_percent"]) == pytest.approx(60)
     assert stage_item["completed_stages"] == ["SETTING_OUT", "REBAR", "FORMWORK"]
@@ -2217,8 +2229,7 @@ def test_beam_progress_is_stored_per_capture_and_keeps_latest_value(
     assert range_save.status_code == 200
     range_payload = range_save.json()
     range_item = next(
-        item for item in range_payload["items"]
-        if item["beam_segment_id"] == segments[0]["id"]
+        item for item in range_payload["items"] if item["beam_segment_id"] == segments[0]["id"]
     )
     assert float(range_item["progress_percent"]) == pytest.approx(36)
     assert len(range_item["stage_ranges"]["SETTING_OUT"]) == 1
@@ -2226,9 +2237,7 @@ def test_beam_progress_is_stored_per_capture_and_keeps_latest_value(
     assert float(range_item["stage_ranges"]["SETTING_OUT"][0]["end_m"]) == 3
     assert float(range_item["stage_ranges"]["REBAR"][0]["start_m"]) == 0
     assert float(range_item["stage_ranges"]["REBAR"][0]["end_m"]) == 3.75
-    summaries = {
-        summary["stage"]: summary for summary in range_payload["stage_summaries"]
-    }
+    summaries = {summary["stage"]: summary for summary in range_payload["stage_summaries"]}
     # The untouched second beam keeps its previous 75% legacy value, which is
     # interpreted as three complete stages for backward compatibility.
     assert float(summaries["SETTING_OUT"]["completed_length_m"]) == pytest.approx(6.75)
@@ -2279,32 +2288,36 @@ def test_upper_floor_beam_stages_carry_forward_across_capture_dates(
                 "size_bytes": 1024,
             },
         ).json()
-        captures.append(client.post(
-            f"/api/v1/projects/{project_id}/captures",
-            headers=auth_headers,
-            json={
-                "source_video_id": media["id"],
-                "captured_at": f"2026-01-{day:02d}T10:00:00+07:00",
-                "start_floor_id": floor["id"],
-                "start_x": 0.2,
-                "start_y": 0.4,
-            },
-        ).json())
+        captures.append(
+            client.post(
+                f"/api/v1/projects/{project_id}/captures",
+                headers=auth_headers,
+                json={
+                    "source_video_id": media["id"],
+                    "captured_at": f"2026-01-{day:02d}T10:00:00+07:00",
+                    "start_floor_id": floor["id"],
+                    "start_x": 0.2,
+                    "start_y": 0.4,
+                },
+            ).json()
+        )
 
     segment = client.put(
         f"/api/v1/projects/{project_id}/floors/{floor['id']}/beam-segments",
         headers=auth_headers,
         json={
             "sheet_name": "ST-04",
-            "segments": [{
-                "code": "L2-B-1",
-                "beam_type": "B1",
-                "start_x": 0.2,
-                "start_y": 0.4,
-                "end_x": 0.4,
-                "end_y": 0.4,
-                "length_m": 3.75,
-            }],
+            "segments": [
+                {
+                    "code": "L2-B-1",
+                    "beam_type": "B1",
+                    "start_x": 0.2,
+                    "start_y": 0.4,
+                    "end_x": 0.4,
+                    "end_y": 0.4,
+                    "length_m": 3.75,
+                }
+            ],
         },
     ).json()[0]
 
@@ -2314,10 +2327,12 @@ def test_upper_floor_beam_stages_carry_forward_across_capture_dates(
             headers=auth_headers,
             json={
                 "floor_id": floor["id"],
-                "entries": [{
-                    "beam_segment_id": segment["id"],
-                    "completed_stages": stages,
-                }],
+                "entries": [
+                    {
+                        "beam_segment_id": segment["id"],
+                        "completed_stages": stages,
+                    }
+                ],
             },
         )
 

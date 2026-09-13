@@ -73,10 +73,12 @@ def select_warp_points(quality: list[tuple[str, float]]) -> set[int]:
     selected: set[int] = set()
     for start in range(0, len(quality), window_size):
         stop = min(start + window_size, len(quality))
-        selected.add(max(
-            range(start, stop),
-            key=lambda index: (status_rank[quality[index][0]], quality[index][1]),
-        ))
+        selected.add(
+            max(
+                range(start, stop),
+                key=lambda index: (status_rank[quality[index][0]], quality[index][1]),
+            )
+        )
     # The tour must always open at the actual beginning and retain its final
     # position. Quality-based selection may otherwise start half a second late
     # or omit the endpoint when a neighbouring still is sharper.
@@ -130,9 +132,7 @@ def select_spatial_warp_points(samples: list[TourStationSample]) -> set[int]:
     localized = [
         sample
         for sample in samples
-        if sample.x is not None
-        and sample.y is not None
-        and sample.heading_deg is not None
+        if sample.x is not None and sample.y is not None and sample.heading_deg is not None
     ]
     if len(localized) <= 2:
         return {sample.frame_index for sample in localized}
@@ -156,7 +156,17 @@ def select_spatial_warp_points(samples: list[TourStationSample]) -> set[int]:
             continue
         selected.add(sample.frame_index)
         travelled %= spacing
-    selected.add(localized[-1].frame_index)
+    minimum_station_distance = max(spacing * 0.35, 1e-6)
+    last_selected = next(sample for sample in reversed(localized) if sample.frame_index in selected)
+    final = localized[-1]
+    if (
+        math.hypot(
+            float(final.x) - float(last_selected.x),
+            float(final.y) - float(last_selected.y),
+        )
+        >= minimum_station_distance
+    ):
+        selected.add(final.frame_index)
 
     # Arc-length sampling can leave a long time gap when the camera moves
     # slowly before a faster section. Keep its spatial distribution, but add
@@ -190,7 +200,19 @@ def select_spatial_warp_points(samples: list[TourStationSample]) -> set[int]:
                 between,
                 key=lambda sample: abs(sample.timestamp_ms - target_ms),
             )
-            if candidate.frame_index not in {left_index, right_index}:
+            left_distance = math.hypot(
+                float(candidate.x) - float(left.x),
+                float(candidate.y) - float(left.y),
+            )
+            right_distance = math.hypot(
+                float(candidate.x) - float(right.x),
+                float(candidate.y) - float(right.y),
+            )
+            if (
+                candidate.frame_index not in {left_index, right_index}
+                and left_distance >= minimum_station_distance
+                and right_distance >= minimum_station_distance
+            ):
                 selected.add(candidate.frame_index)
             target_ms += target_interval_ms
     return selected
@@ -212,9 +234,7 @@ def build_spatial_visibility_targets(
     stations = [
         sample
         for sample in samples
-        if sample.frame_index in station_indices
-        and sample.x is not None
-        and sample.y is not None
+        if sample.frame_index in station_indices and sample.x is not None and sample.y is not None
     ]
     graph: dict[int, list[int]] = {}
     for source in stations:
@@ -229,9 +249,7 @@ def build_spatial_visibility_targets(
                 target.frame_index,
             ),
         )
-        graph[source.frame_index] = [
-            target.frame_index for target in candidates[: max(0, limit)]
-        ]
+        graph[source.frame_index] = [target.frame_index for target in candidates[: max(0, limit)]]
     return graph
 
 
@@ -254,18 +272,26 @@ def _extract_tour_panoramas(
     # terms can exhaust its parser stack even though system memory is healthy.
     # Dense tours are cheaper and safer to decode once at the keyframe rate.
     if len(frame_indices) > 64:
-        _run([
-            _binary("ffmpeg"), "-y", "-i", str(source), "-map", "0:v:0",
-            "-vf",
-            f"fps={CAPTURE_FRAME_FPS},scale={tour_width}:{tour_height}:flags=lanczos",
-            "-threads", "2", "-q:v", "2",
-            str(destination_dir / "%06d.jpg"),
-        ])
+        _run(
+            [
+                _binary("ffmpeg"),
+                "-y",
+                "-i",
+                str(source),
+                "-map",
+                "0:v:0",
+                "-vf",
+                f"fps={CAPTURE_FRAME_FPS},scale={tour_width}:{tour_height}:flags=lanczos",
+                "-threads",
+                "2",
+                "-q:v",
+                "2",
+                str(destination_dir / "%06d.jpg"),
+            ]
+        )
         extracted = sorted(destination_dir.glob("*.jpg"))
         if not extracted or frame_indices[-1] >= len(extracted):
-            raise VideoPipelineError(
-                "สร้างภาพ Virtual Tour ความละเอียดสูงไม่ครบตามจำนวนสถานี"
-            )
+            raise VideoPipelineError("สร้างภาพ Virtual Tour ความละเอียดสูงไม่ครบตามจำนวนสถานี")
         return {index: extracted[index] for index in frame_indices}
 
     source_frame_numbers = [
@@ -274,12 +300,25 @@ def _extract_tour_panoramas(
     # Direct argv invocation does not need shell quoting, but FFmpeg's filter
     # parser still requires the comma inside eq() to be escaped.
     selection = "+".join(f"eq(n\\,{number})" for number in source_frame_numbers)
-    _run([
-        _binary("ffmpeg"), "-y", "-i", str(source), "-map", "0:v:0",
-        "-vf", f"select={selection},scale={tour_width}:{tour_height}:flags=lanczos",
-        "-fps_mode", "vfr", "-threads", "2", "-q:v", "2",
-        str(destination_dir / "%06d.jpg"),
-    ])
+    _run(
+        [
+            _binary("ffmpeg"),
+            "-y",
+            "-i",
+            str(source),
+            "-map",
+            "0:v:0",
+            "-vf",
+            f"select={selection},scale={tour_width}:{tour_height}:flags=lanczos",
+            "-fps_mode",
+            "vfr",
+            "-threads",
+            "2",
+            "-q:v",
+            "2",
+            str(destination_dir / "%06d.jpg"),
+        ]
+    )
     extracted = sorted(destination_dir.glob("*.jpg"))
     if len(extracted) != len(frame_indices):
         raise VideoPipelineError("สร้างภาพ Virtual Tour ความละเอียดสูงไม่สำเร็จ")
@@ -309,19 +348,25 @@ def _binary(name: str) -> str:
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(
-            command, check=True, capture_output=True, text=True, encoding="utf-8"
-        )
+        return subprocess.run(command, check=True, capture_output=True, text=True, encoding="utf-8")
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or str(exc))[-3000:]
         raise VideoPipelineError(detail) from exc
 
 
 def _probe(source: Path) -> tuple[dict[str, object], dict[str, object]]:
-    result = _run([
-        _binary("ffprobe"), "-v", "error", "-show_streams", "-show_format",
-        "-of", "json", str(source),
-    ])
+    result = _run(
+        [
+            _binary("ffprobe"),
+            "-v",
+            "error",
+            "-show_streams",
+            "-show_format",
+            "-of",
+            "json",
+            str(source),
+        ]
+    )
     payload = json.loads(result.stdout)
     streams = payload.get("streams", [])
     stream = next((item for item in streams if item.get("codec_type") == "video"), None)
@@ -416,11 +461,19 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
             _set_progress(db, job, capture, 25, "EXTRACTING_KEYFRAMES")
             frames_dir = workdir / "keyframes"
             frames_dir.mkdir()
-            _run([
-                _binary("ffmpeg"), "-y", "-i", str(processing_source), "-vf",
-                f"fps={CAPTURE_FRAME_FPS},scale={PROXY_WIDTH}:{PROXY_HEIGHT}",
-                "-q:v", "3", str(frames_dir / "%06d.jpg"),
-            ])
+            _run(
+                [
+                    _binary("ffmpeg"),
+                    "-y",
+                    "-i",
+                    str(processing_source),
+                    "-vf",
+                    f"fps={CAPTURE_FRAME_FPS},scale={PROXY_WIDTH}:{PROXY_HEIGHT}",
+                    "-q:v",
+                    "3",
+                    str(frames_dir / "%06d.jpg"),
+                ]
+            )
             db.execute(delete(Keyframe).where(Keyframe.capture_id == capture.id))
             db.flush()
             frames = sorted(frames_dir.glob("*.jpg"))
@@ -432,17 +485,20 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
             for index, frame in enumerate(frames):
                 timestamp_ms = round(index * 1000 / CAPTURE_FRAME_FPS)
                 key = (
-                    f"projects/{capture.project_id}/captures/{capture.id}/"
-                    f"keyframes/{index:06d}.jpg"
+                    f"projects/{capture.project_id}/captures/{capture.id}/keyframes/{index:06d}.jpg"
                 )
                 upload_file(key=key, source=str(frame), content_type="image/jpeg")
                 frame_media = db.scalar(select(MediaFile).where(MediaFile.object_key == key))
                 if frame_media is None:
                     frame_media = MediaFile(
-                        project_id=capture.project_id, media_kind="KEYFRAME",
-                        bucket=get_settings().s3_bucket, object_key=key,
-                        original_filename=frame.name, content_type="image/jpeg",
-                        size_bytes=frame.stat().st_size, upload_status="READY",
+                        project_id=capture.project_id,
+                        media_kind="KEYFRAME",
+                        bucket=get_settings().s3_bucket,
+                        object_key=key,
+                        original_filename=frame.name,
+                        content_type="image/jpeg",
+                        size_bytes=frame.stat().st_size,
+                        upload_status="READY",
                     )
                     db.add(frame_media)
                     db.flush()
@@ -452,7 +508,9 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
                     frame_media.size_bytes = frame.stat().st_size
                     frame_media.upload_status = "READY"
                 keyframe = Keyframe(
-                    capture_id=capture.id, media_file_id=frame_media.id, frame_index=index,
+                    capture_id=capture.id,
+                    media_file_id=frame_media.id,
+                    frame_index=index,
                     timestamp_ms=timestamp_ms,
                     quality_status=quality[index][0],
                     is_warp_point=False,
@@ -462,42 +520,42 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
                 media_by_index[index] = frame_media
             db.flush()
             _set_progress(db, job, capture, 75, "LOCALIZING")
-            poses = save_camera_poses(
-                db, capture=capture, job=job, source=processing_source
-            )
+            poses = save_camera_poses(db, capture=capture, job=job, source=processing_source)
             pose_by_keyframe = {pose.keyframe_id: pose for pose in poses}
             spatial_samples = []
             for keyframe in keyframes:
                 pose = pose_by_keyframe.get(keyframe.id)
-                spatial_samples.append(TourStationSample(
-                    frame_index=keyframe.frame_index,
-                    timestamp_ms=keyframe.timestamp_ms,
-                    quality_status=keyframe.quality_status,
-                    x=(
-                        float(pose.visual_x if pose.visual_x is not None else pose.x)
-                        if pose is not None
-                        else None
-                    ),
-                    y=(
-                        float(pose.visual_y if pose.visual_y is not None else pose.y)
-                        if pose is not None
-                        else None
-                    ),
-                    heading_deg=(
-                        float(
-                            pose.visual_heading_deg
-                            if pose.visual_heading_deg is not None
-                            else pose.heading_deg
-                        )
-                        if pose is not None
-                        else None
-                    ),
-                ))
-            dense_candidates = select_warp_points(quality)
-            warp_point_indices = remove_consecutive_duplicate_warp_points(
-                spatial_samples,
-                dense_candidates,
-            )
+                spatial_samples.append(
+                    TourStationSample(
+                        frame_index=keyframe.frame_index,
+                        timestamp_ms=keyframe.timestamp_ms,
+                        quality_status=keyframe.quality_status,
+                        x=(
+                            float(pose.visual_x if pose.visual_x is not None else pose.x)
+                            if pose is not None
+                            else None
+                        ),
+                        y=(
+                            float(pose.visual_y if pose.visual_y is not None else pose.y)
+                            if pose is not None
+                            else None
+                        ),
+                        heading_deg=(
+                            float(
+                                pose.visual_heading_deg
+                                if pose.visual_heading_deg is not None
+                                else pose.heading_deg
+                            )
+                            if pose is not None
+                            else None
+                        ),
+                    )
+                )
+            # Portal stations represent physical camera locations. Selecting
+            # them by elapsed time created duplicate/half-metre stations when
+            # the operator paused, so a click visibly moved much less than the
+            # ring implied. Sample the reconstructed arc length instead.
+            warp_point_indices = select_spatial_warp_points(spatial_samples)
             if len(warp_point_indices) < 2:
                 warp_point_indices = select_warp_points(quality)
             for keyframe in keyframes:
@@ -548,9 +606,7 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
             job.finished_at = utc_now()
         if capture:
             capture.status = (
-                "STITCHER_REQUIRED"
-                if isinstance(exc, Insta360StitcherUnavailable)
-                else "FAILED"
+                "STITCHER_REQUIRED" if isinstance(exc, Insta360StitcherUnavailable) else "FAILED"
             )
         db.commit()
         raise

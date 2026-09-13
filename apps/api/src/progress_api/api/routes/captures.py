@@ -92,7 +92,7 @@ PRESIGNED_URL_TTL = timedelta(hours=1)
 # confidence is still exposed and never promoted to an automatic progress fact.
 ROUTE_VECTOR_MIN_CONFIDENCE = 0.25
 ROUTE_VECTOR_MAX_STEP_FACTOR = 4.0
-ROUTE_VECTOR_VISIBLE_LOOKAHEAD = 6
+ROUTE_VECTOR_VISIBLE_LOOKAHEAD = 1
 ROUTE_VECTOR_MAX_VISIBLE_DISTANCE_FACTOR = 8.0
 ROUTE_VECTOR_MIN_STRAIGHTNESS = 0.82
 # A visual tour should offer more than one ring in a straight observed walk,
@@ -105,7 +105,11 @@ ROUTE_VECTOR_MIN_STRAIGHTNESS = 0.82
 # ring in each direction (the 21/12 capture is the clearest example). Expose a
 # wider local corridor like the accepted reference while still rejecting an
 # abrupt 90-degree turn through a wall.
-ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 10
+# Without a depth/triangle mesh, only the immediately observed stations are a
+# defensible visibility claim. Longer time-ordered links can still point behind
+# excavation faces and, more importantly, make a click appear to land short of
+# the painted ring when the reconstructed scale drifts along the segment.
+ROUTE_VECTOR_AUTOMATIC_NEIGHBOR_STEPS = 1
 ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS = 0.60
 EVALUATION_REQUIRED_POINT_COUNT = 20
 PROTECTED_REFERENCE_CAPTURE_ID = uuid.UUID("b78c9804-76c2-4e96-93d4-53cf55ffba3f")
@@ -230,14 +234,9 @@ def _build_route_vectors(
     Plan proximity is deliberately not used: two images can overlap on a drawing
     while being separated by a wall or by a different part of the walkthrough.
     """
-    all_frames = [
-        (keyframe, pose)
-        for keyframe, _media, pose in rows
-        if pose is not None
-    ]
+    all_frames = [(keyframe, pose) for keyframe, _media, pose in rows if pose is not None]
     has_authoritative_visibility = any(
-        getattr(pose, "visibility_target_ids", None) is not None
-        for _, pose in all_frames
+        getattr(pose, "visibility_target_ids", None) is not None for _, pose in all_frames
     )
     # Every localized panorama is a reviewable station. The station flag is
     # retained so legacy/incomplete captures still have a safe fallback.
@@ -284,6 +283,7 @@ def _build_route_vectors(
             else getattr(pose, "visual_heading_deg", None)
         )
         return None if value is None else float(value)
+
     # An imported mesh visibility graph may legitimately target an in-between
     # panorama that is not one of the sparse map/timeline stations. Keep every
     # graph node available here; filtering first silently discarded approved
@@ -300,9 +300,7 @@ def _build_route_vectors(
         first_xy = route_xy(first)
         second_xy = route_xy(second)
         if first_xy is not None and second_xy is not None:
-            visual_steps.append(
-                hypot(second_xy[0] - first_xy[0], second_xy[1] - first_xy[1])
-            )
+            visual_steps.append(hypot(second_xy[0] - first_xy[0], second_xy[1] - first_xy[1]))
     positive_steps = sorted(step for step in visual_steps if step > 1e-8)
     median_step = positive_steps[len(positive_steps) // 2] if positive_steps else 0.0
 
@@ -337,18 +335,14 @@ def _build_route_vectors(
                 or route_heading(source) is None
             ):
                 break
-            segment_distance = hypot(
-                target_xy[0] - previous_xy[0], target_xy[1] - previous_xy[1]
-            )
+            segment_distance = hypot(target_xy[0] - previous_xy[0], target_xy[1] - previous_xy[1])
             if segment_distance <= 1e-8:
                 previous = target
                 continue
             if median_step and segment_distance > median_step * ROUTE_VECTOR_MAX_STEP_FACTOR:
                 break
             cumulative_distance += segment_distance
-            direct_distance = hypot(
-                target_xy[0] - source_xy[0], target_xy[1] - source_xy[1]
-            )
+            direct_distance = hypot(target_xy[0] - source_xy[0], target_xy[1] - source_xy[1])
             straightness = direct_distance / max(cumulative_distance, 1e-8)
             visible_distance = (
                 not median_step
@@ -452,14 +446,10 @@ def _build_route_vectors(
                     ):
                         continue
                     left, right = sorted((source_index, target_index))
-                    segment_poses = [
-                        pose for _frame, pose in tour_frames[left : right + 1]
-                    ]
+                    segment_poses = [pose for _frame, pose in tour_frames[left : right + 1]]
                     steps = [
                         pose_distance(first, second)
-                        for first, second in zip(
-                            segment_poses, segment_poses[1:], strict=False
-                        )
+                        for first, second in zip(segment_poses, segment_poses[1:], strict=False)
                     ]
                     cumulative = sum(steps)
                     direct = pose_distance(segment_poses[0], segment_poses[-1])
@@ -472,8 +462,7 @@ def _build_route_vectors(
                     # presenting a ring through a wall.
                     if separation == 1 or (
                         cumulative > 1e-8
-                        and direct / cumulative
-                        >= ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS
+                        and direct / cumulative >= ROUTE_VECTOR_AUTOMATIC_MIN_STRAIGHTNESS
                     ):
                         links.add((source_frame.id, target_frame.id))
         else:
@@ -528,9 +517,8 @@ def _build_route_vectors(
                             ),
                         ),
                     )[0].id
-                    if (
-                        mapped_target_id != source_frame.id
-                        and is_safe_station_link(source_frame.id, mapped_target_id)
+                    if mapped_target_id != source_frame.id and is_safe_station_link(
+                        source_frame.id, mapped_target_id
                     ):
                         links.add((source_frame.id, mapped_target_id))
 
@@ -541,9 +529,7 @@ def _build_route_vectors(
         # after the click is precisely the mismatch the user sees as an
         # inaccurate warp. This projection is read-only and never rewrites the
         # protected poses, station flags or reconstruction.
-        for source_frame, source in (
-            tour_frames if use_stored_visibility_graph else []
-        ):
+        for source_frame, source in tour_frames if use_stored_visibility_graph else []:
             compatible_sources = [
                 item
                 for item in graph_sources
@@ -591,9 +577,8 @@ def _build_route_vectors(
                         ),
                     ),
                 )[0].id
-                if (
-                    mapped_target_id != source_frame.id
-                    and is_safe_station_link(source_frame.id, mapped_target_id)
+                if mapped_target_id != source_frame.id and is_safe_station_link(
+                    source_frame.id, mapped_target_id
                 ):
                     links.add((source_frame.id, mapped_target_id))
 
@@ -607,9 +592,7 @@ def _build_route_vectors(
         # scale can drift, so legacy height may only be used as a bounded local
         # slope (the web client exposes one immediate Stella station at a time).
         vertical_is_trusted = all(
-            str(getattr(pose, "algorithm", "")).startswith(
-                ("hloc-rig-", "rig-pycolmap-")
-            )
+            str(getattr(pose, "algorithm", "")).startswith(("hloc-rig-", "rig-pycolmap-"))
             for pose in (source, target)
         )
         raw_dz = float((target.relative_z_m or 0) - (source.relative_z_m or 0))
@@ -622,12 +605,9 @@ def _build_route_vectors(
         target_visual_y = target_xy[1] if target_xy is not None else None
         source_visual_z = getattr(source, "visual_z", None)
         target_ground_z = getattr(target, "visual_ground_z", None)
-        quaternion = tuple(
-            getattr(source, f"orientation_q{axis}", None) for axis in "xyzw"
-        )
+        quaternion = tuple(getattr(source, f"orientation_q{axis}", None) for axis in "xyzw")
         has_full_pose = not uses_plan_aligned_heading(source) and all(
-            value is not None
-            for value in (source_visual_z, target_ground_z, *quaternion)
+            value is not None for value in (source_visual_z, target_ground_z, *quaternion)
         )
         if all(
             value is not None
@@ -697,9 +677,7 @@ def _build_route_vectors(
                 local_yaw = degrees(atan2(local_x, local_z))
                 local_pitch = degrees(atan2(-local_y, local_horizontal))
             else:
-                local_yaw = (
-                    visual_bearing - float(source_visual_heading) + 180
-                ) % 360 - 180
+                local_yaw = (visual_bearing - float(source_visual_heading) + 180) % 360 - 180
                 local_pitch = degrees(atan2(dz, visual_distance))
         else:
             continue
