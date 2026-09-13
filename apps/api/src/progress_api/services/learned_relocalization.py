@@ -30,6 +30,97 @@ class LearnedPlanAnchor:
     plan_y: float
     inliers: int
     localized_faces: int
+    visual_x: float
+    visual_y: float
+    visual_z: float
+    visual_ground_z: float
+    orientation_q: tuple[float, float, float, float]
+
+
+FACE_YAWS = (0.0, 90.0, 180.0, 270.0)
+
+
+def _face_index(name: str) -> int:
+    return int(Path(name).stem.split("_")[1])
+
+
+def _rotation_about_y(degrees: float) -> np.ndarray:
+    angle = math.radians(degrees)
+    return np.asarray(
+        [
+            [math.cos(angle), 0.0, math.sin(angle)],
+            [0.0, 1.0, 0.0],
+            [-math.sin(angle), 0.0, math.cos(angle)],
+        ],
+        dtype=np.float64,
+    )
+
+
+def _canonical_reference_frame(
+    model: object,
+    camera_centres: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Return a deterministic Z-up frame and camera height in SfM units."""
+    up_vectors: list[np.ndarray] = []
+    for image in model.images.values():
+        if image.has_pose:
+            rotation = image.cam_from_world().inverse().rotation.matrix()
+            up_vectors.append(rotation @ np.asarray([0.0, -1.0, 0.0]))
+    if not up_vectors:
+        raise LearnedRelocalizationUnavailable("Reference map has no camera rotations")
+    reference_up = up_vectors[0]
+    aligned = [
+        vector if float(np.dot(vector, reference_up)) >= 0 else -vector
+        for vector in up_vectors
+    ]
+    vertical = np.mean(np.stack(aligned), axis=0)
+    vertical /= max(float(np.linalg.norm(vertical)), 1e-9)
+    origin = camera_centres[0]
+    centered = camera_centres - origin
+    horizontal = centered - np.outer(centered @ vertical, vertical)
+    _u, _s, axes = np.linalg.svd(horizontal, full_matrices=False)
+    axis_x = axes[0] - float(np.dot(axes[0], vertical)) * vertical
+    axis_x /= max(float(np.linalg.norm(axis_x)), 1e-9)
+    axis_y = np.cross(vertical, axis_x)
+    axis_y /= max(float(np.linalg.norm(axis_y)), 1e-9)
+    canonical = np.stack([axis_x, axis_y, vertical])
+
+    points = np.asarray(
+        [point.xyz for point in model.points3D.values()], dtype=np.float64
+    )
+    camera_height = 0.0
+    if len(points) >= 50 and len(camera_centres) >= 4:
+        horizontal_centres = camera_centres - np.outer(
+            camera_centres @ vertical, vertical
+        )
+        horizontal_points = points - np.outer(points @ vertical, vertical)
+        steps = np.linalg.norm(np.diff(horizontal_centres, axis=0), axis=1)
+        positive_steps = steps[(steps > 1e-8) & np.isfinite(steps)]
+        if len(positive_steps):
+            median_step = float(np.median(positive_steps))
+            distances = np.sum(
+                (horizontal_points[:, None, :] - horizontal_centres[None, :, :]) ** 2,
+                axis=2,
+            )
+            nearest = np.argmin(distances, axis=1)
+            nearest_squared = distances[np.arange(len(points)), nearest]
+            heights = np.sum(
+                (camera_centres[nearest] - points) * vertical, axis=1
+            )
+            plausible = (
+                (np.sqrt(nearest_squared) <= max(median_step * 8.0, 0.5))
+                & np.isfinite(heights)
+                & (heights >= median_step * 1.25)
+                & (heights <= median_step * 8.0)
+            )
+            candidates = heights[plausible]
+            if len(candidates) >= 30:
+                camera_height = float(np.median(candidates))
+    if not math.isfinite(camera_height) or camera_height <= 1e-8:
+        raise LearnedRelocalizationUnavailable(
+            "Reference map cannot estimate a reliable walking surface"
+        )
+    return origin, canonical, camera_height
 
 
 def _activate_runtime() -> None:
@@ -341,7 +432,13 @@ def _build_reference_map(
         minimum_registered = max(8, math.ceil(expected_views * 0.70))
         has_route_mapper = all(
             key in metadata
-            for key in ("reference_camera_centres", "reference_plan_points")
+            for key in (
+                "reference_camera_centres",
+                "reference_plan_points",
+                "canonical_origin",
+                "canonical_from_reconstruction",
+                "camera_height_units",
+            )
         )
         if cached_model.num_reg_images() >= minimum_registered and has_route_mapper:
             return cache_dir, metadata
@@ -419,6 +516,9 @@ def _build_reference_map(
         camera_centres = np.asarray(
             [np.mean(centres[index], axis=0) for index in common], dtype=np.float64
         )
+        canonical_origin, canonical_frame, camera_height_units = (
+            _canonical_reference_frame(model, camera_centres)
+        )
         plan_points = np.asarray(
             [reference_positions[index] for index in common], dtype=np.float64
         )
@@ -452,6 +552,9 @@ def _build_reference_map(
             "total_panoramas": len(reference_positions),
             "p90_plan_step_ratio": p90_plan_step_ratio,
             "registered_views": int(model.num_reg_images()),
+            "canonical_origin": canonical_origin.tolist(),
+            "canonical_from_reconstruction": canonical_frame.tolist(),
+            "camera_height_units": camera_height_units,
         }
         # Persist the exact reconstruction selected and validated above.
         # Do not rely on HLoc's numbered-folder move on Windows (see cache
@@ -536,7 +639,7 @@ def learned_3d_plan_anchors(
     # pairs and competes with Revit for half an hour.  Use a route-wide pilot
     # sample on CPU; CUDA workers retain the denser production sample.
     cpu_limited = not torch.cuda.is_available()
-    maximum_query_panoramas = 12 if cpu_limited else 32
+    maximum_query_panoramas = 24 if cpu_limited else 40
     query_indices = list(range(len(current_paths)))
     if len(current_paths) > maximum_query_panoramas:
         query_indices = np.linspace(
@@ -626,7 +729,7 @@ def learned_3d_plan_anchors(
     )
     with Path(f"{result_path}_logs.pkl").open("rb") as file:
         logs = pickle.load(file)
-    centres: dict[int, list[tuple[np.ndarray, int]]] = defaultdict(list)
+    poses: dict[int, list[tuple[np.ndarray, np.ndarray, int]]] = defaultdict(list)
     for name, log in logs.get("loc", {}).items():
         cluster_index = log.get("best_cluster")
         if cluster_index is None:
@@ -641,28 +744,51 @@ def learned_3d_plan_anchors(
         if inliers < settings.hloc_min_geometric_inliers:
             continue
         cam_from_world = result["cam_from_world"]
-        centre = np.asarray(cam_from_world.inverse().translation, dtype=np.float64)
+        world_from_camera = cam_from_world.inverse()
+        centre = np.asarray(world_from_camera.translation, dtype=np.float64)
+        face_index = _face_index(name)
+        world_from_panorama = (
+            world_from_camera.rotation.matrix()
+            @ _rotation_about_y(-FACE_YAWS[face_index])
+        )
         if np.isfinite(centre).all():
-            centres[_panorama_index(name)].append((centre, inliers))
+            poses[_panorama_index(name)].append(
+                (centre, world_from_panorama, inliers)
+            )
 
     reference_centres = np.asarray(
         metadata["reference_camera_centres"], dtype=np.float64
     )
     reference_plan = np.asarray(metadata["reference_plan_points"], dtype=np.float64)
+    canonical_origin = np.asarray(metadata["canonical_origin"], dtype=np.float64)
+    canonical_frame = np.asarray(
+        metadata["canonical_from_reconstruction"], dtype=np.float64
+    )
+    camera_height_units = float(metadata["camera_height_units"])
     anchors: list[LearnedPlanAnchor] = []
-    for panorama_index, observations in sorted(centres.items()):
-        observations.sort(key=lambda item: item[1], reverse=True)
+    for panorama_index, observations in sorted(poses.items()):
+        observations.sort(key=lambda item: item[2], reverse=True)
         selected = observations[:3]
-        total_inliers = sum(item[1] for item in selected)
+        total_inliers = sum(item[2] for item in selected)
         if (
             len(selected) == 1
             and total_inliers < settings.hloc_min_geometric_inliers * 2
         ):
             continue
-        weights = np.asarray([item[1] for item in selected], dtype=np.float64)
+        weights = np.asarray([item[2] for item in selected], dtype=np.float64)
         centre = np.average(
             np.asarray([item[0] for item in selected]), axis=0, weights=weights
         )
+        centre_spread = max(
+            float(np.linalg.norm(item[0] - centre)) for item in selected
+        )
+        if centre_spread > camera_height_units * 0.75:
+            continue
+        canonical_rotation = canonical_frame @ selected[0][1]
+        orientation_q = tuple(
+            float(value) for value in pycolmap.Rotation3d(canonical_rotation).quat
+        )
+        canonical_centre = canonical_frame @ (centre - canonical_origin)
         plan = _project_centre_to_plan_route(
             centre,
             reference_centres,
@@ -683,6 +809,11 @@ def learned_3d_plan_anchors(
                     plan_y=float(plan[1]),
                     inliers=total_inliers,
                     localized_faces=len(selected),
+                    visual_x=float(canonical_centre[0]),
+                    visual_y=float(canonical_centre[1]),
+                    visual_z=float(canonical_centre[2]),
+                    visual_ground_z=float(canonical_centre[2] - camera_height_units),
+                    orientation_q=orientation_q,
                 )
             )
     return anchors

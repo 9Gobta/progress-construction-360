@@ -6,7 +6,7 @@ import math
 import shutil
 import subprocess
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -83,7 +83,7 @@ def _alignment_is_auto_accepted(alignment: PlanAlignment) -> bool:
     """
     if alignment.source.startswith("persistent-map-v1:"):
         return alignment.confidence >= PERSISTENT_MAP_AUTO_ACCEPT_CONFIDENCE
-    if alignment.source.startswith("previous-hloc-sfm-v1:"):
+    if alignment.source.startswith(("previous-hloc-sfm-v1:", "previous-hloc-6dof-v2:")):
         return alignment.confidence >= LEARNED_3D_AUTO_ACCEPT_CONFIDENCE
     return False
 
@@ -148,6 +148,8 @@ class PlanAlignment:
     mirror: bool
     confidence: float
     source: str
+    spatial_samples: list[SfMPathSample] | None = None
+    spatial_camera_height: float | None = None
 
 
 @dataclass(frozen=True)
@@ -1239,8 +1241,8 @@ def _align_from_previous_capture(
                         sum(anchor.inliers for anchor in plan_anchors),
                     )
                     if (
-                        len(plan_anchors) >= PRIOR_MIN_ROUTE_MATCHES
-                        and anchor_span >= max(2, round(len(current_frames) * 0.35))
+                        len(plan_anchors) >= max(8, PRIOR_MIN_ROUTE_MATCHES)
+                        and anchor_span >= max(2, round(len(current_frames) * 0.80))
                     ):
                         correspondences = []
                         timestamps = []
@@ -1266,14 +1268,42 @@ def _align_from_previous_capture(
                             timestamps,
                             start_x=capture_start_x,
                             start_y=capture_start_y,
-                            source_label=f"previous-hloc-sfm-v1:{previous_id}",
+                            source_label=f"previous-hloc-6dof-v2:{previous_id}",
                         )
                         # A validated 3-D localization result is stronger than
                         # the legacy pairwise 2-D matcher. Return it now so we
                         # neither spend another few minutes matching every
                         # panorama nor risk replacing it with an ambiguous fit.
                         if alignment is not None:
-                            return alignment
+                            spatial_samples = [
+                                SfMPathSample(
+                                    timestamp_ms=(
+                                        anchor.panorama_index
+                                        * PRIOR_MATCH_INTERVAL_SECONDS
+                                        * 1000
+                                    ),
+                                    x=anchor.visual_x,
+                                    y=anchor.visual_y,
+                                    heading_deg=0.0,
+                                    confidence=min(1.0, anchor.inliers / 100.0),
+                                    relative_z=anchor.visual_z,
+                                    orientation_q=anchor.orientation_q,
+                                )
+                                for anchor in plan_anchors
+                            ]
+                            return replace(
+                                alignment,
+                                spatial_samples=spatial_samples,
+                                spatial_camera_height=float(
+                                    np.median(
+                                        [
+                                            anchor.visual_z
+                                            - anchor.visual_ground_z
+                                            for anchor in plan_anchors
+                                        ]
+                                    )
+                                ),
+                            )
                 except LearnedRelocalizationUnavailable as exc:
                     logger.info(
                         "3-D learned relocalization unavailable for capture %s: %s",
@@ -1364,6 +1394,50 @@ def _poses_at_timestamps(
             )
         )
     return results
+
+
+def _spatial_samples_at_timestamps(
+    samples: list[SfMPathSample], timestamps_ms: list[int]
+) -> list[SfMPathSample]:
+    """Interpolate one rigid 6-DoF reconstruction without mixing SLAM frames."""
+    if len(samples) < 2 or any(sample.orientation_q is None for sample in samples):
+        raise LocalizationError("6-DoF localization did not cover enough panoramas")
+    ordered = sorted(samples, key=lambda sample: sample.timestamp_ms)
+    source_times = np.asarray([sample.timestamp_ms for sample in ordered], dtype=float)
+    target_times = np.asarray(timestamps_ms, dtype=float)
+    quaternions = np.asarray([sample.orientation_q for sample in ordered], dtype=float)
+    for index in range(1, len(quaternions)):
+        if float(np.dot(quaternions[index - 1], quaternions[index])) < 0:
+            quaternions[index] *= -1
+    components = np.column_stack(
+        [
+            np.interp(target_times, source_times, quaternions[:, axis])
+            for axis in range(4)
+        ]
+    )
+    components /= np.maximum(np.linalg.norm(components, axis=1, keepdims=True), 1e-9)
+    xs = np.interp(target_times, source_times, [sample.x for sample in ordered])
+    ys = np.interp(target_times, source_times, [sample.y for sample in ordered])
+    zs = np.interp(
+        target_times, source_times, [sample.relative_z for sample in ordered]
+    )
+    confidences = np.interp(
+        target_times, source_times, [sample.confidence for sample in ordered]
+    )
+    return [
+        SfMPathSample(
+            timestamp_ms=timestamp_ms,
+            x=float(x),
+            y=float(y),
+            heading_deg=0.0,
+            confidence=float(confidence),
+            relative_z=float(z),
+            orientation_q=tuple(float(value) for value in quaternion),
+        )
+        for timestamp_ms, x, y, z, confidence, quaternion in zip(
+            timestamps_ms, xs, ys, zs, confidences, components, strict=True
+        )
+    ]
 
 
 def estimate_keyframe_poses(
@@ -2063,11 +2137,21 @@ def realign_existing_camera_poses(
         return None
 
     accepted = _alignment_is_auto_accepted(alignment)
+    spatial_estimates = (
+        _spatial_samples_at_timestamps(
+            alignment.spatial_samples,
+            [keyframe.timestamp_ms for keyframe, _pose in rows],
+        )
+        if alignment.spatial_samples is not None
+        and alignment.spatial_camera_height is not None
+        else None
+    )
     algorithm = f"{STELLA_ALGORITHM_VERSION}:{alignment.source}"[:80]
     db.execute(delete(CapturePathPoint).where(CapturePathPoint.capture_id == capture.id))
     pose_by_keyframe: dict[uuid.UUID, CameraPose] = {}
-    for (keyframe, pose), (x, y, heading) in zip(
+    for row_index, ((keyframe, pose), (x, y, heading)) in enumerate(zip(
         rows, alignment.points, strict=True
+    )
     ):
         bounded_x = min(1.0, max(0.0, x))
         bounded_y = min(1.0, max(0.0, y))
@@ -2079,16 +2163,33 @@ def realign_existing_camera_poses(
         pose.localization_run_id = job.id
         pose.algorithm = algorithm
         pose.needs_review = not accepted
-        # HLoc has aligned the 2-D route to the plan, but this pass does not
-        # replace Stella's 3-D reconstruction frame.  A spatial backfill from
-        # an older attempt is therefore stale and must never be advertised as
-        # a full 6-DoF/mesh pose for portal projection.
-        pose.visual_z = None
-        pose.visual_ground_z = None
-        pose.orientation_qx = None
-        pose.orientation_qy = None
-        pose.orientation_qz = None
-        pose.orientation_qw = None
+        spatial = spatial_estimates[row_index] if spatial_estimates is not None else None
+        pose.visual_x = (
+            Decimal(str(round(spatial.x, 6))) if spatial is not None else pose.visual_x
+        )
+        pose.visual_y = (
+            Decimal(str(round(spatial.y, 6))) if spatial is not None else pose.visual_y
+        )
+        pose.visual_z = (
+            Decimal(str(round(spatial.relative_z, 6))) if spatial is not None else None
+        )
+        pose.visual_ground_z = (
+            Decimal(
+                str(
+                    round(
+                        spatial.relative_z - float(alignment.spatial_camera_height),
+                        6,
+                    )
+                )
+            )
+            if spatial is not None
+            else None
+        )
+        quaternion = spatial.orientation_q if spatial is not None else None
+        pose.orientation_qx = Decimal(str(round(quaternion[0], 8))) if quaternion else None
+        pose.orientation_qy = Decimal(str(round(quaternion[1], 8))) if quaternion else None
+        pose.orientation_qz = Decimal(str(round(quaternion[2], 8))) if quaternion else None
+        pose.orientation_qw = Decimal(str(round(quaternion[3], 8))) if quaternion else None
         pose.visibility_target_ids = None
         if accepted:
             # This is a new automatic run, not a human verification event.
@@ -2130,6 +2231,25 @@ def realign_existing_camera_poses(
         evaluation.is_within_tolerance = error <= float(
             evaluation.tolerance_normalized
         )
+
+    evaluation_points = list(
+        db.scalars(
+            select(PathEvaluationPoint).where(
+                PathEvaluationPoint.capture_id == capture.id
+            )
+        )
+    )
+    if evaluation_points:
+        within_count = sum(point.is_within_tolerance for point in evaluation_points)
+        accepted = (
+            accepted
+            and len(evaluation_points) >= 20
+            and within_count / len(evaluation_points) >= 0.90
+        )
+    if spatial_estimates is None:
+        accepted = False
+    for _keyframe, pose in rows:
+        pose.needs_review = not accepted
 
     job.progress_percent = max(job.progress_percent, 85)
     db.commit()

@@ -242,6 +242,11 @@ def _build_route_vectors(
     # Every localized panorama is a reviewable station. The station flag is
     # retained so legacy/incomplete captures still have a safe fallback.
     tour_frames = [item for item in all_frames if getattr(item[0], "is_warp_point", False)]
+    # A portal is a spatial claim, not a decorative navigation control. Never
+    # publish rings for a route that failed localization review: a plausible
+    # circle in the wrong physical place is more dangerous than no circle.
+    if any(bool(getattr(pose, "needs_review", False)) for _frame, pose in tour_frames):
+        return []
     is_protected_reference = any(
         getattr(keyframe, "capture_id", None) == PROTECTED_REFERENCE_CAPTURE_ID
         for keyframe, _pose in all_frames

@@ -17,6 +17,7 @@ from progress_api.services.localization import (
     _motion_between,
     _poses_at_timestamps,
     _select_unique_visual_matches,
+    _spatial_samples_at_timestamps,
     estimate_keyframe_poses,
     interpolate_piecewise_offsets,
 )
@@ -47,6 +48,35 @@ def test_only_verified_absolute_alignment_can_auto_publish() -> None:
     assert not _alignment_is_auto_accepted(
         _alignment("grid6-road-edge-fit-v1", 1.0)
     )
+
+
+def test_spatial_pose_interpolation_keeps_one_normalized_quaternion_frame() -> None:
+    samples = [
+        SfMPathSample(
+            timestamp_ms=0,
+            x=0.0,
+            y=0.0,
+            heading_deg=0.0,
+            confidence=0.9,
+            relative_z=1.0,
+            orientation_q=(0.0, 0.0, 0.0, 1.0),
+        ),
+        SfMPathSample(
+            timestamp_ms=1_000,
+            x=2.0,
+            y=4.0,
+            heading_deg=0.0,
+            confidence=0.7,
+            relative_z=3.0,
+            # Same quaternion hemisphere must be selected before interpolation.
+            orientation_q=(0.0, 0.0, 0.0, -1.0),
+        ),
+    ]
+
+    pose = _spatial_samples_at_timestamps(samples, [500])[0]
+
+    assert (pose.x, pose.y, pose.relative_z) == pytest.approx((1.0, 2.0, 2.0))
+    assert np.linalg.norm(pose.orientation_q) == pytest.approx(1.0)
 
 
 def test_3d_camera_projects_onto_corresponding_piecewise_plan_segment() -> None:

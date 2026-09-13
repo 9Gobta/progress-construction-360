@@ -71,6 +71,29 @@ def test_route_vectors_link_real_spatial_neighbours() -> None:
     assert forward.bearing_deg == pytest.approx(90)
 
 
+def test_route_vectors_hide_unverified_portals() -> None:
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    rows = [
+        (
+            SimpleNamespace(id=uuid.uuid4(), is_warp_point=True),
+            object(),
+            SimpleNamespace(
+                floor_id=floor_id,
+                visual_x=Decimal(index),
+                visual_y=Decimal("0"),
+                visual_heading_deg=Decimal("0"),
+                confidence=Decimal("0.9"),
+                localization_run_id=run_id,
+                needs_review=True,
+            ),
+        )
+        for index in range(2)
+    ]
+
+    assert captures._build_route_vectors(rows) == []  # type: ignore[arg-type]
+
+
 def test_route_vectors_bound_and_invert_legacy_vertical_delta() -> None:
     floor_id = uuid.uuid4()
     run_id = uuid.uuid4()
