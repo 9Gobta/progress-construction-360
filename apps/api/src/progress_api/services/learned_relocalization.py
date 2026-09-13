@@ -523,6 +523,7 @@ def learned_3d_plan_anchors(
         return []
     _activate_runtime()
     import pycolmap
+    import torch
     from hloc import extract_features, localize_sfm, match_features, pairs_from_retrieval
 
     settings = get_settings()
@@ -530,7 +531,12 @@ def learned_3d_plan_anchors(
     # trajectory; localizing every panorama is unnecessary and made a normal
     # capture take several minutes.  Sample the whole time span so the selected
     # anchors still cover the start, middle and end of the walk.
-    maximum_query_panoramas = 32
+    # The field laptop can run the learned stack without CUDA, but matching a
+    # full 32x24 panorama grid on CPU creates well over a thousand LightGlue
+    # pairs and competes with Revit for half an hour.  Use a route-wide pilot
+    # sample on CPU; CUDA workers retain the denser production sample.
+    cpu_limited = not torch.cuda.is_available()
+    maximum_query_panoramas = 12 if cpu_limited else 32
     query_indices = list(range(len(current_paths)))
     if len(current_paths) > maximum_query_panoramas:
         query_indices = np.linspace(
@@ -538,14 +544,21 @@ def learned_3d_plan_anchors(
         ).tolist()
         current_paths = [current_paths[index] for index in query_indices]
     maximum_reference_panoramas = max(8, settings.hloc_max_reference_images // 4)
+    if cpu_limited:
+        maximum_reference_panoramas = min(maximum_reference_panoramas, 8)
     if len(reference_paths) > maximum_reference_panoramas:
         indices = np.linspace(
             0, len(reference_paths) - 1, maximum_reference_panoramas, dtype=int
         ).tolist()
         reference_paths = [reference_paths[index] for index in indices]
         reference_positions = [reference_positions[index] for index in indices]
+    # Include the sampling density in the cache identity.  Otherwise a CPU
+    # pilot could accidentally reuse a differently sampled map (or vice versa).
+    sampled_cache_key = (
+        f"{cache_key}-q{maximum_query_panoramas}-r{len(reference_paths)}"
+    )
     cache_dir, metadata = _build_reference_map(
-        reference_paths, reference_positions, cache_key=cache_key
+        reference_paths, reference_positions, cache_key=sampled_cache_key
     )
     model = pycolmap.Reconstruction(cache_dir / "sfm")
     reference_names = [str(name) for name in metadata["reference_names"]]
