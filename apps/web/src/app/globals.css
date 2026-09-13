@@ -340,6 +340,9 @@ a { color: inherit; text-decoration: none; }
 .virtual-tour-badge { position: absolute; z-index: 7; top: 76px; left: 18px; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.36); border-radius: 999px; padding: 7px 11px; color: #fff; background: rgba(8,20,15,.72); box-shadow: 0 5px 18px rgba(0,0,0,.18); backdrop-filter: blur(8px); pointer-events: none; }
 .virtual-tour-badge strong { font-size: 12px; }
 .virtual-tour-badge span { color: #d7ebe1; font-size: 10px; }
+.portal-verification-warning { position: absolute; z-index: 7; top: 116px; left: 18px; display: flex; max-width: 420px; flex-direction: column; gap: 2px; border: 1px solid rgba(255,208,123,.72); border-radius: 10px; padding: 8px 11px; color: #fff8e8; background: rgba(89,49,5,.86); box-shadow: 0 5px 18px rgba(0,0,0,.2); backdrop-filter: blur(8px); pointer-events: none; }
+.portal-verification-warning strong { font-size: 12px; }
+.portal-verification-warning span { color: #ffe8b9; font-size: 10px; line-height: 1.35; }
 .floating-map { position: absolute; z-index: 8; top: 18px; right: 18px; width: clamp(300px, 29vw, 390px); max-height: calc(100% - 36px); overflow-x: hidden; overflow-y: auto; border-color: rgba(255,255,255,.7); border-radius: 12px; box-shadow: 0 8px 28px rgba(0,0,0,.32); overscroll-behavior: contain; scrollbar-gutter: stable; transition: inset 180ms ease, width 180ms ease, right 180ms ease; }
 .floating-map.is-expanded { inset: 16px; width: auto; max-height: calc(100% - 32px); }
 .floating-map .capture-map-toolbar { min-height: 50px; padding: 7px 9px; }

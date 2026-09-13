@@ -1900,6 +1900,7 @@ export function PanoramaViewer({
           {webglUnavailable && <span className="panorama-compatibility-note">กำลังแสดงโหมดสำรอง 360° — ลากภาพเพื่อหมุนและใช้ล้อเมาส์เพื่อซูมได้</span>}
         </div> : <div className="viewer-empty">ยังไม่มีภาพ 360 — รอการประมวลผลไฟล์ต้นทางให้เสร็จ</div>}
         {selected && <div className="virtual-tour-badge"><strong>Virtual Tour · จุด {selectedStationNumber}</strong><span>{activeRouteVectors.length} จุดที่เดินต่อได้จากตำแหน่งนี้ · {navigableFrames.length} จุดวาร์ปทั้งหมด</span></div>}
+        {selected?.pose?.needs_review && activeRouteVectors.length === 0 && <div className="portal-verification-warning"><strong>ซ่อนจุดวาร์ปชั่วคราว</strong><span>ตำแหน่งกล้องยังไม่ผ่านการตรวจความแม่นยำ ระบบจึงไม่แสดงวงที่อาจอยู่ผิดตำแหน่ง</span></div>}
 
         <section className={`capture-map-panel floating-map ${mapExpanded ? "is-expanded" : ""} ${aligning ? "is-aligning" : ""}`}>
           <div className="capture-map-toolbar">
