@@ -521,7 +521,13 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
                 media_by_index[index] = frame_media
             db.flush()
             _set_progress(db, job, capture, 75, "LOCALIZING")
-            poses = save_camera_poses(db, capture=capture, job=job, source=processing_source)
+            poses = save_camera_poses(
+                db,
+                capture=capture,
+                job=job,
+                source=processing_source,
+                sensor_source=source if suffix == ".insv" else None,
+            )
             pose_by_keyframe = {pose.keyframe_id: pose for pose in poses}
             spatial_samples = []
             for keyframe in keyframes:
@@ -571,34 +577,37 @@ def process_video_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
                 for keyframe in keyframes
                 if keyframe.frame_index in warp_point_indices
             ]
-            verified_by_keyframe: dict[uuid.UUID, dict[str, dict[str, float | int | str]]] = {}
-            for source_frame, target_frame in zip(
-                station_frames, station_frames[1:], strict=False
-            ):
-                verified = estimate_portal_direction(
-                    frames[source_frame.frame_index],
-                    frames[target_frame.frame_index],
-                )
-                if verified is None:
-                    continue
-                common = {
-                    "confidence": round(verified.confidence, 5),
-                    "inliers": verified.inliers,
-                    "dispersion_deg": round(verified.dispersion_deg, 3),
-                    "method": "panorama-pair-essential-matrix-v1",
-                }
-                verified_by_keyframe.setdefault(source_frame.id, {})[
-                    str(target_frame.id)
-                ] = {**common, "local_yaw_deg": round(verified.forward_yaw_deg, 3)}
-                verified_by_keyframe.setdefault(target_frame.id, {})[
-                    str(source_frame.id)
-                ] = {**common, "local_yaw_deg": round(verified.backward_yaw_deg, 3)}
-            for keyframe_id, directions in verified_by_keyframe.items():
-                pose = pose_by_keyframe.get(keyframe_id)
-                if pose is not None:
-                    pose.portal_directions_json = json.dumps(
-                        directions, separators=(",", ":")
+            if get_settings().localization_engine != "visual_inertial":
+                verified_by_keyframe: dict[
+                    uuid.UUID, dict[str, dict[str, float | int | str]]
+                ] = {}
+                for source_frame, target_frame in zip(
+                    station_frames, station_frames[1:], strict=False
+                ):
+                    verified = estimate_portal_direction(
+                        frames[source_frame.frame_index],
+                        frames[target_frame.frame_index],
                     )
+                    if verified is None:
+                        continue
+                    common = {
+                        "confidence": round(verified.confidence, 5),
+                        "inliers": verified.inliers,
+                        "dispersion_deg": round(verified.dispersion_deg, 3),
+                        "method": "panorama-pair-essential-matrix-v1",
+                    }
+                    verified_by_keyframe.setdefault(source_frame.id, {})[
+                        str(target_frame.id)
+                    ] = {**common, "local_yaw_deg": round(verified.forward_yaw_deg, 3)}
+                    verified_by_keyframe.setdefault(target_frame.id, {})[
+                        str(source_frame.id)
+                    ] = {**common, "local_yaw_deg": round(verified.backward_yaw_deg, 3)}
+                for keyframe_id, directions in verified_by_keyframe.items():
+                    pose = pose_by_keyframe.get(keyframe_id)
+                    if pose is not None:
+                        pose.portal_directions_json = json.dumps(
+                            directions, separators=(",", ":")
+                        )
 
             tour_frames = _extract_tour_panoramas(
                 source=processing_source,

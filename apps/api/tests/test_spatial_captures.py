@@ -453,6 +453,63 @@ def test_full_pose_same_floor_portal_stays_below_camera_despite_vertical_drift()
     assert forward.delta_z == pytest.approx(-1.30)
 
 
+def test_metric_vio_pose_is_not_overridden_by_two_view_bearing() -> None:
+    """A metric 3-D pose is authoritative over scale-free pairwise matching."""
+    floor_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    ids = [uuid.uuid4(), uuid.uuid4()]
+    rows = []
+    for index, frame_id in enumerate(ids):
+        rows.append(
+            (
+                SimpleNamespace(
+                    id=frame_id,
+                    capture_id=uuid.uuid4(),
+                    quality_status="USABLE",
+                    is_warp_point=True,
+                ),
+                object(),
+                SimpleNamespace(
+                    floor_id=floor_id,
+                    relative_z_m=Decimal("1.65"),
+                    visual_x=Decimal(index),
+                    visual_y=Decimal("0"),
+                    visual_z=Decimal("1.65"),
+                    visual_ground_z=Decimal("0"),
+                    visual_heading_deg=Decimal("0"),
+                    orientation_qx=Decimal("0"),
+                    orientation_qy=Decimal("0"),
+                    orientation_qz=Decimal("0"),
+                    orientation_qw=Decimal("1"),
+                    portal_directions_json=(
+                        json.dumps(
+                            {
+                                str(ids[1]): {
+                                    "local_yaw_deg": 5.0,
+                                    "confidence": 0.99,
+                                }
+                            }
+                        )
+                        if index == 0
+                        else "{}"
+                    ),
+                    visibility_target_ids="[]",
+                    confidence=Decimal("0.95"),
+                    localization_run_id=run_id,
+                    algorithm="metric-visual-inertial-v1:verified-map",
+                    needs_review=False,
+                ),
+            )
+        )
+
+    vectors = captures._build_route_vectors(rows)  # type: ignore[arg-type]
+    forward = next(item for item in vectors if item.from_keyframe_id == ids[0])
+
+    assert forward.local_yaw_deg != pytest.approx(5.0)
+    assert forward.direction_source == "metric-visual-inertial"
+    assert forward.verification_method == "metric-vio-calibrated-pose-v1"
+
+
 def test_complete_spatial_pose_does_not_trust_proximity_as_mesh_visibility() -> None:
     """Full camera poses do not make a nearest-neighbour list occlusion-safe."""
     floor_id = uuid.uuid4()

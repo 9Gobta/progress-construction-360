@@ -267,6 +267,11 @@ def _build_route_vectors(
         """
         return "previous-hloc-sfm-v1:" in str(getattr(pose, "algorithm", ""))
 
+    def uses_metric_visual_inertial_pose(pose: CameraPose) -> bool:
+        return str(getattr(pose, "algorithm", "")).startswith(
+            "metric-visual-inertial-v1:"
+        )
+
     def route_xy(pose: CameraPose) -> tuple[float, float] | None:
         if uses_plan_aligned_heading(pose):
             return float(pose.x), float(pose.y)
@@ -613,7 +618,9 @@ def _build_route_vectors(
         # scale can drift, so legacy height may only be used as a bounded local
         # slope (the web client exposes one immediate Stella station at a time).
         vertical_is_trusted = all(
-            str(getattr(pose, "algorithm", "")).startswith(("hloc-rig-", "rig-pycolmap-"))
+            str(getattr(pose, "algorithm", "")).startswith(
+                ("hloc-rig-", "rig-pycolmap-", "metric-visual-inertial-v1:")
+            )
             for pose in (source, target)
         )
         raw_dz = float((target.relative_z_m or 0) - (source.relative_z_m or 0))
@@ -703,7 +710,7 @@ def _build_route_vectors(
         else:
             continue
         image_verified = verified_portal_direction(source, target_id)
-        if image_verified is not None:
+        if image_verified is not None and not uses_metric_visual_inertial_pose(source):
             # The pairwise essential matrix measures the destination direction
             # from the actual two panoramas and removes accumulated trajectory
             # interpolation error. Gravity/height still supplies the floor
@@ -722,7 +729,9 @@ def _build_route_vectors(
                 local_yaw_deg=local_yaw,
                 local_pitch_deg=local_pitch,
                 direction_source=(
-                    "full-6dof-mesh"
+                    "metric-visual-inertial"
+                    if uses_metric_visual_inertial_pose(source)
+                    else "full-6dof-mesh"
                     if has_full_pose
                     else (
                         "plan-aligned-heading"
@@ -733,7 +742,9 @@ def _build_route_vectors(
                 confidence=confidence,
                 verified=True,
                 verification_method=(
-                    "panorama-pair-essential-matrix-v1"
+                    "metric-vio-calibrated-pose-v1"
+                    if uses_metric_visual_inertial_pose(source)
+                    else "panorama-pair-essential-matrix-v1"
                     if image_verified is not None
                     else "full-6dof-equirectangular+triangle-mesh-raycast"
                     if has_full_pose and use_stored_visibility_graph

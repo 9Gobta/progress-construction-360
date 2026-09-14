@@ -260,6 +260,7 @@ const TOUR_ROUTE_SOURCES = new Set([
   "visual-slam-pose",
   "plan-aligned-heading",
   "full-6dof-mesh",
+  "metric-visual-inertial",
   "stabilized-360-mesh",
 ]);
 

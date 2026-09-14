@@ -44,6 +44,10 @@ from progress_api.services.stella_localization import (
     recover_stella_path,
 )
 from progress_api.services.temporary_workspace import temporary_workspace
+from progress_api.services.visual_inertial_localization import (
+    VIO_ALGORITHM_VERSION,
+    recover_visual_inertial_path,
+)
 
 LOCALIZATION_FPS = 1
 LOCALIZATION_WIDTH = 960
@@ -71,6 +75,8 @@ logger = logging.getLogger(__name__)
 
 
 def _visual_algorithm_version() -> str:
+    if get_settings().localization_engine == "visual_inertial":
+        return VIO_ALGORITHM_VERSION
     return (
         RIG_SFM_ALGORITHM_VERSION
         if get_settings().localization_engine == "pycolmap"
@@ -100,6 +106,7 @@ def recover_visual_path(
     source: Path,
     *,
     end_timestamp_ms: int,
+    sensor_source: Path | None = None,
     map_db_input: Path | None = None,
     map_db_output: Path | None = None,
     spatial_model_output: Path | None = None,
@@ -118,6 +125,12 @@ def recover_visual_path(
             source,
             end_timestamp_ms=end_timestamp_ms,
             spatial_model_output=spatial_model_output,
+        )
+    if engine == "visual_inertial":
+        return recover_visual_inertial_path(
+            source,
+            sensor_source=sensor_source,
+            end_timestamp_ms=end_timestamp_ms,
         )
     raise LocalizationError(f"Unsupported localization engine: {engine}")
 
@@ -1746,6 +1759,7 @@ def save_camera_poses(
     capture: Capture,
     job: ProcessingJob,
     source: Path,
+    sensor_source: Path | None = None,
 ) -> list[CameraPose]:
     algorithm_version = _visual_algorithm_version()
     keyframes = list(
@@ -1791,6 +1805,7 @@ def save_camera_poses(
         relative_samples = recover_visual_path(
             source,
             end_timestamp_ms=end_timestamp_ms,
+            sensor_source=sensor_source,
             map_db_input=map_input,
             map_db_output=map_output,
             spatial_model_output=spatial_model_output,
@@ -1804,6 +1819,7 @@ def save_camera_poses(
         relative_samples = recover_visual_path(
             source,
             end_timestamp_ms=end_timestamp_ms,
+            sensor_source=sensor_source,
             map_db_output=map_output,
             spatial_model_output=spatial_model_output,
         )
@@ -2016,6 +2032,12 @@ def realign_existing_camera_poses(
     callers may then run the full SLAM pipeline.  A failed match never mutates
     the existing route.
     """
+    # VIO scale, gravity and orientation come from the synchronized raw sensor
+    # stream. Re-aligning only its old database projection from an MP4 retry
+    # would silently discard the very evidence that makes it metric.
+    if get_settings().localization_engine == "visual_inertial":
+        return None
+
     rows = list(
         db.execute(
             select(Keyframe, CameraPose)
@@ -2219,6 +2241,11 @@ def localize_capture_job(db: Session, job_id: uuid.UUID) -> dict[str, object]:
     media = db.get(MediaFile, capture.source_video_id) if capture else None
     if job is None or capture is None or media is None or media.upload_status != "READY":
         raise LocalizationError("Capture หรือวิดีโอต้นทางยังไม่พร้อม")
+    if get_settings().localization_engine == "visual_inertial":
+        raise LocalizationError(
+            "Visual-inertial localization must run through Retry Processing "
+            "with the original INSV and stitched video together"
+        )
     try:
         job.status = "RUNNING"
         job.progress_percent = 10

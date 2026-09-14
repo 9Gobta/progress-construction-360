@@ -67,6 +67,14 @@ class Settings(BaseSettings):
     stella_vslam_tracking_fps: int = Field(default=15, ge=2, le=30)
     stella_vslam_frame_skip: int = Field(default=1, ge=1, le=30)
 
+    # Metric visual-inertial localization.  The runner is deliberately an
+    # external process so the API is not coupled to one research SLAM package
+    # (OpenVINS, ORB-SLAM3, or a future commercial engine).  It must implement
+    # the JSON contract documented in docs/development/10-visual-inertial-localization.md.
+    visual_inertial_runner_path: str | None = None
+    visual_inertial_calibration_path: str | None = None
+    visual_inertial_timeout_seconds: int = Field(default=7200, ge=60, le=86400)
+
     # Learned cross-capture relocalization. HLoc retrieves visually similar
     # perspective views and DISK + LightGlue verifies them before a historical
     # human-confirmed plan position is allowed to constrain a new Stella path.
@@ -90,8 +98,10 @@ class Settings(BaseSettings):
     @classmethod
     def validate_localization_engine(cls, value: str) -> str:
         normalized = value.strip().lower()
-        if normalized not in {"stella_vslam", "pycolmap"}:
-            raise ValueError("LOCALIZATION_ENGINE must be stella_vslam or pycolmap")
+        if normalized not in {"stella_vslam", "pycolmap", "visual_inertial"}:
+            raise ValueError(
+                "LOCALIZATION_ENGINE must be stella_vslam, pycolmap, or visual_inertial"
+            )
         return normalized
 
     @property

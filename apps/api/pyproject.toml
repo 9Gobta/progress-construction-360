@@ -26,6 +26,7 @@ dependencies = [
   "pwdlib[argon2]>=0.3,<1.0",
   "PyJWT>=2.10,<3.0",
   "sqlalchemy==2.0.52",
+  "telemetry-parser==0.3.0",
 ]
 
 [project.optional-dependencies]
